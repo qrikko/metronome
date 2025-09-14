@@ -1,0 +1,25 @@
+#!/bin/bash
+
+for i in "$@"; do
+    case $i in
+        -g|--generate)
+            cmake -S . -B ../build
+            exit 0
+            ;;
+        -b|--build)
+            cmake --build ../build
+            exit 0
+            ;;
+        -r|--run)
+            ../build/metronome
+            exit 0
+            ;;
+        *)
+            echo "help print here"
+            echo ""
+            exit 0
+            ;;
+    esac
+done
+
+
