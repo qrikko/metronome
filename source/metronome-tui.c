@@ -28,6 +28,7 @@ void update_display(WINDOW *win) {
     wclear(win);
 
     box(win, 0, 0);
+    
     int x, y;
     getmaxyx(win, y, x);
     
@@ -41,7 +42,8 @@ void update_display(WINDOW *win) {
         if (metronome->interval > 0) {
             mvwprintw(
                 win,
-                y/2 -1, 
+                2,
+                //y/2 -1, 
                 (x-len)/2, 
                 "Increase BPM by %.0f in %d measures", 
                 metronome->bpm_step, metronome->next_step
@@ -52,23 +54,26 @@ void update_display(WINDOW *win) {
         int len = snprintf(
             NULL, 0, 
             "Metronome at %.0f BPM [%d/%d]", 
-            metronome->bpm, metronome->nominator, metronome->denominator
+            metronome->bpm, metronome->beats, metronome->unit
         );
         mvwprintw(
             win,
-            y/2, 
+            3,
+            //y/2, 
             (x-len)/2, 
             "Metronome at %.0f BPM [%d/%d]", 
-            metronome->bpm, metronome->nominator, metronome->denominator
+            metronome->bpm, metronome->beats, metronome->unit
         );
 
-        int step = len/(metronome->nominator-1);
+        const int margin = 5;
+        len = getmaxx(win) -2*margin;
+        int step = len/(metronome->beats-1);
 
-        for(int i=0; i<metronome->nominator; ++i) {
+        for(int i=0; i<metronome->beats; ++i) {
             mvwprintw(
                 win,
                 y/2 +1, 
-                (x-len)/2 + step*i, 
+                i*step + margin, 
                 "%d", 
                 i+1
             );
@@ -79,6 +84,14 @@ void update_display(WINDOW *win) {
             (x-len)/2 + step*(metronome->tick!=0 ? metronome->tick-1 : metronome->tick), 
             "^" 
         );
+        if (metronome->tick == 1) {
+            init_pair(1, COLOR_YELLOW, -1);
+            wbkgd(win, COLOR_PAIR(1));
+        } else {
+            wbkgd(win, 0);
+            //wbkgd(win, COLOR_PAIR(2));
+        }
+        //wrefresh(win);
     }
 
     mvwprintw(stdscr, LINES -2, 0, "-- NORMAL --");
@@ -113,28 +126,56 @@ int handle_command_mode() {
                 metronome->next_step = metronome->interval;
                 metronome->reset = 0x1;
             }
-        } else if (strcmp(token, "signature") == 0 || strcmp(token, "ts") == 0) {
-            char *nominator = strtok(NULL, " ");
-            char *denominator = strtok(NULL, " ");
-            if (nominator && denominator) {
-                metronome->nominator = atoi(nominator);
-                metronome->denominator = atoi(denominator);
+        } else if (strcmp(token, "beats") == 0) {
+            char *value = strtok(NULL, " ");
+            if (value) {
+                metronome_set_beats(atoi(value));
             } else {
-                mvprintw(LINES-1, 0, ":nominator = ");
+                mvprintw(LINES-1, 0, ":beats = ");
                 refresh();
                 {
-                    char nominator[3];
-                    wgetnstr(stdscr, nominator, sizeof(nominator)-1);
-                    metronome->nominator = atoi(nominator);
+                    char beats[3];
+                    wgetnstr(stdscr, beats, sizeof(beats)-1);
+                    metronome_set_beats(atoi(beats));
+                }
+            }
+        } else if (strcmp(token, "unit") == 0) {
+            char *value = strtok(NULL, " ");
+            if (value) {
+                metronome_set_unit(atoi(value));
+            } else {
+                mvprintw(LINES-1, 0, ":unit = ");
+                refresh();
+                {
+                    char unit[3];
+                    wgetnstr(stdscr, unit, sizeof(unit)-1);
+                    metronome_set_unit(atoi(unit));
+                }
+            }
+        }
+
+        else if (strcmp(token, "signature") == 0 || strcmp(token, "ts") == 0) {
+            char *beats = strtok(NULL, " ");
+            char *unit = strtok(NULL, " ");
+            if (beats && unit) {
+                metronome_set_beats(atoi(beats));
+                metronome_set_unit(atoi(unit));
+            } else {
+                mvprintw(LINES-1, 0, ":beats = ");
+                refresh();
+                {
+                    char beats[3];
+                    wgetnstr(stdscr, beats, sizeof(beats)-1);
+                    metronome_set_beats(atoi(beats));
                 }
                 {
                     move(LINES-1, 0);
                     clrtoeol();
-                    mvprintw(LINES-1, 0, ":denominator = ");
+                    mvprintw(LINES-1, 0, ":unit = ");
                     refresh();
-                    char denominator[3];
-                    wgetnstr(stdscr, denominator, sizeof(denominator)-1);
-                    metronome->denominator = atoi(denominator);
+                    char unit[3];
+                    wgetnstr(stdscr, unit, sizeof(unit)-1);
+                    metronome_set_unit(atoi(unit));
                 }
             }
             metronome->next_step = metronome->interval;
@@ -204,16 +245,20 @@ int main(int argc, char **argv) {
     program_state_t program_state = NORMAL_MODE;
 
     metronome_setup();
-    //metronome->denominator = 8;
-    //metronome->nominator = 7;
     init_tui();
     {
+        start_color();
+        use_default_colors();
+
         int ymax, xmax;
         getmaxyx(stdscr, ymax, xmax);
-        WINDOW *win = newwin(ymax/2, xmax/2, ymax/4, xmax/4);
+        const int margin = 10;
+        init_pair(1, COLOR_YELLOW, 0);
+        WINDOW *win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
         wtimeout(win, 0);
         update_display(win);
 
+        wrefresh(win);
         struct Coord bpm_pos = {};
         getyx(win, bpm_pos.y, bpm_pos.x);
 
@@ -234,14 +279,14 @@ int main(int argc, char **argv) {
                         int len = snprintf(
                             NULL, 0, 
                             "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->nominator, metronome->denominator
+                            metronome->bpm, metronome->beats, metronome->unit
                         );
                         mvwprintw(
                             win,
-                            y/2, 
+                            3, 
                             (x-len)/2, 
                             "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->nominator, metronome->denominator
+                            metronome->bpm, metronome->beats, metronome->unit
                         );
                         wrefresh(win);
                     } break;
@@ -253,28 +298,28 @@ int main(int argc, char **argv) {
                         int len = snprintf(
                             NULL, 0, 
                             "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->nominator, metronome->denominator
+                            metronome->bpm, metronome->beats, metronome->unit
                         );
                         mvwprintw(
                             win,
-                            y/2, 
+                            3, 
                             (x-len)/2, 
                             "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->nominator, metronome->denominator
+                            metronome->bpm, metronome->beats, metronome->unit
                         );
                         wrefresh(win);
                     } break;
                     case 'l':
-                        metronome_inc_beats_per_measure();
+                        metronome_inc_beats();
                         break;
                     case 'h':
-                        metronome_dec_beats_per_measure();
+                        metronome_dec_beats();
                         break;
                     case 'L':
-                        metronome_dec_note_length();
+                        metronome_dec_unit();
                         break;
                     case 'H':
-                        metronome_inc_note_length();
+                        metronome_inc_unit();
                         break;
                     case ' ':
                         program_state = PAUSE_MODE;
@@ -311,7 +356,11 @@ int main(int argc, char **argv) {
             }
 
             if(metronome->tick > 0) {
+                //wbkgd(win, COLOR_PAIR(1));
+                //wrefresh(win);
                 update_display(win);
+                //wbkgd(win, COLOR_PAIR(2));
+                //wrefresh(win);
                 metronome->tick = 0;
             } 
             wrefresh(win);
