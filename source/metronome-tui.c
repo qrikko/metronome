@@ -216,6 +216,18 @@ int handle_command_mode() {
             metronome->next_step = metronome->interval;
             metronome->reset = 0x1;
             metronome->tick = 1;
+        } else if(strcmp(token, "w") == 0) {
+            const char *home = getenv("HOME");
+            const char *rel = "/.local/share/metronome.state";
+            char path[128];
+            sprintf(path, "%s/%s", home, rel);
+
+            FILE *f = fopen(path, "wb");
+            if (f) {
+                uint8_t data[3] = { metronome->bpm, metronome->beats, metronome->unit };
+                fwrite(data, sizeof(uint8_t), 3, f);
+                fclose(f);
+            }
         }
 
         else if(strcmp(token, "quit") == 0 || strcmp(token, "q") == 0) {
@@ -233,7 +245,7 @@ int handle_command_mode() {
 
 int main(int argc, char **argv) {
     struct Metronome *const metronome = metronome_state();
-    metronome->bpm=120.0; 
+    metronome->bpm = 80.0;
     metronome->base_bpm=120.0; 
     metronome->bpm_step=0;
     metronome->interval=0;

@@ -126,9 +126,22 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
 
 int metronome_setup() {
     _metronome.tick = 1;
-    _metronome.beats = 0x4;
-    _metronome.unit = 0x4;
+    {
+        uint8_t data[3];
+        const char *home = getenv("HOME");
+        const char *rel = "/.local/share/metronome.state";
+        char path[128];
+        sprintf(path, "%s/%s", home, rel);
+        FILE *f = fopen(path, "rb");
+        if (f) {
+            fread(data, sizeof(uint8_t), 3, f);
 
+            _metronome.bpm      = data[0]; 
+            _metronome.beats    = data[1];
+            _metronome.unit     = data[2];
+            fclose(f);
+        }
+    }
 
     ma_result result;
     ma_device_config device_config;
