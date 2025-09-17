@@ -140,6 +140,10 @@ int metronome_setup() {
             _metronome.beats    = data[1];
             _metronome.unit     = data[2];
             fclose(f);
+        } else {
+            _metronome.bpm      = 80.0;
+            _metronome.beats    = 4;
+            _metronome.unit     = 4;
         }
     }
 
