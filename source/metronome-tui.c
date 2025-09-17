@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 #include "metronome.h"
 
@@ -23,8 +22,7 @@ void init_tui() {
     timeout(0);
 }
 
-void update_display(WINDOW *win) {
-    struct Metronome *const metronome = metronome_state();
+void update_display(struct Metronome *metronome, WINDOW *win) {
     wclear(win);
 
     box(win, 0, 0);
@@ -35,7 +33,7 @@ void update_display(WINDOW *win) {
     {
         int len = snprintf(
             NULL, 0, 
-            "Increase BPM by %.0f in %d measures", 
+            "Increase BPM by %d in %d measures", 
             metronome->bpm_step, metronome->next_step
         );
 
@@ -45,7 +43,7 @@ void update_display(WINDOW *win) {
                 2,
                 //y/2 -1, 
                 (x-len)/2, 
-                "Increase BPM by %.0f in %d measures", 
+                "Increase BPM by %d in %d measures", 
                 metronome->bpm_step, metronome->next_step
             );
         }
@@ -53,7 +51,7 @@ void update_display(WINDOW *win) {
     {
         int len = snprintf(
             NULL, 0, 
-            "Metronome at %.0f BPM [%d/%d]", 
+            "Metronome at %d BPM [%d/%d]", 
             metronome->bpm, metronome->beats, metronome->unit
         );
         mvwprintw(
@@ -61,7 +59,7 @@ void update_display(WINDOW *win) {
             3,
             //y/2, 
             (x-len)/2, 
-            "Metronome at %.0f BPM [%d/%d]", 
+            "Metronome at %d BPM [%d/%d]", 
             metronome->bpm, metronome->beats, metronome->unit
         );
 
@@ -99,8 +97,7 @@ void update_display(WINDOW *win) {
     wrefresh(win);
 }
 
-int handle_command_mode() {
-    struct Metronome *const metronome = metronome_state();
+int handle_command_mode(struct Metronome *metronome) {
     char cmd[COMMAND_MAX_LEN];
     int ch;
     int result = 0;
@@ -129,27 +126,27 @@ int handle_command_mode() {
         } else if (strcmp(token, "beats") == 0) {
             char *value = strtok(NULL, " ");
             if (value) {
-                metronome_set_beats(atoi(value));
+                metronome_set_beats(metronome, atoi(value));
             } else {
                 mvprintw(LINES-1, 0, ":beats = ");
                 refresh();
                 {
                     char beats[3];
                     wgetnstr(stdscr, beats, sizeof(beats)-1);
-                    metronome_set_beats(atoi(beats));
+                    metronome_set_beats(metronome, atoi(beats));
                 }
             }
         } else if (strcmp(token, "unit") == 0) {
             char *value = strtok(NULL, " ");
             if (value) {
-                metronome_set_unit(atoi(value));
+                metronome_set_unit(metronome, atoi(value));
             } else {
                 mvprintw(LINES-1, 0, ":unit = ");
                 refresh();
                 {
                     char unit[3];
                     wgetnstr(stdscr, unit, sizeof(unit)-1);
-                    metronome_set_unit(atoi(unit));
+                    metronome_set_unit(metronome, atoi(unit));
                 }
             }
         }
@@ -158,15 +155,15 @@ int handle_command_mode() {
             char *beats = strtok(NULL, " ");
             char *unit = strtok(NULL, " ");
             if (beats && unit) {
-                metronome_set_beats(atoi(beats));
-                metronome_set_unit(atoi(unit));
+                metronome_set_beats(metronome, atoi(beats));
+                metronome_set_unit(metronome, atoi(unit));
             } else {
                 mvprintw(LINES-1, 0, ":beats = ");
                 refresh();
                 {
                     char beats[3];
                     wgetnstr(stdscr, beats, sizeof(beats)-1);
-                    metronome_set_beats(atoi(beats));
+                    metronome_set_beats(metronome, atoi(beats));
                 }
                 {
                     move(LINES-1, 0);
@@ -175,7 +172,7 @@ int handle_command_mode() {
                     refresh();
                     char unit[3];
                     wgetnstr(stdscr, unit, sizeof(unit)-1);
-                    metronome_set_unit(atoi(unit));
+                    metronome_set_unit(metronome, atoi(unit));
                 }
             }
             metronome->next_step = metronome->interval;
@@ -224,8 +221,7 @@ int handle_command_mode() {
 
             FILE *f = fopen(path, "wb");
             if (f) {
-                uint8_t data[3] = { metronome->bpm, metronome->beats, metronome->unit };
-                fwrite(data, sizeof(uint8_t), 3, f);
+                fwrite(metronome, sizeof(uint8_t), 6, f);
                 fclose(f);
             }
         }
@@ -244,19 +240,22 @@ int handle_command_mode() {
 
 
 int main(int argc, char **argv) {
-    struct Metronome *const metronome = metronome_state();
-    metronome->bpm = 80.0;
-    metronome->base_bpm=120.0; 
-    metronome->bpm_step=0;
-    metronome->interval=0;
-    metronome->next_step = 0;
+    //struct Metronome *const metronome = metronome_state();
+    struct Metronome metronome;
+    metronome_setup(&metronome);
+
+    metronome.bpm = 80;
+    metronome.base_bpm=120.0; 
+    metronome.bpm_step=0;
+    metronome.interval=0;
+    metronome.next_step = 0;
 
     //tick_pos.x = 10;
     //tick_pos.y = 2;
 
     program_state_t program_state = NORMAL_MODE;
 
-    metronome_setup();
+    metronome_setup(&metronome);
     init_tui();
     {
         start_color();
@@ -268,7 +267,7 @@ int main(int argc, char **argv) {
         init_pair(1, COLOR_YELLOW, 0);
         WINDOW *win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
         wtimeout(win, 0);
-        update_display(win);
+        update_display(&metronome, win);
 
         wrefresh(win);
         struct Coord bpm_pos = {};
@@ -285,53 +284,53 @@ int main(int argc, char **argv) {
                 switch(cmd) {
                     case 'j':
                     case 'J': {
-                        metronome->bpm -= (cmd=='j') ? 1 : 5;
+                        metronome.bpm -= (cmd=='j') ? 1 : 5;
                         int x, y;
                         getmaxyx(win, y, x);
                         int len = snprintf(
                             NULL, 0, 
-                            "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->beats, metronome->unit
+                            "Metronome at %d BPM [%d/%d]", 
+                            metronome.bpm, metronome.beats, metronome.unit
                         );
                         mvwprintw(
                             win,
                             3, 
                             (x-len)/2, 
-                            "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->beats, metronome->unit
+                            "Metronome at %d BPM [%d/%d]", 
+                            metronome.bpm, metronome.beats, metronome.unit
                         );
                         wrefresh(win);
                     } break;
                     case 'k':
                     case 'K': {
-                        metronome->bpm += (cmd=='k') ? 1 : 5;
+                        metronome.bpm += (cmd=='k') ? 1 : 5;
                         int x, y;
                         getmaxyx(win, y, x);
                         int len = snprintf(
                             NULL, 0, 
-                            "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->beats, metronome->unit
+                            "Metronome at %d BPM [%d/%d]", 
+                            metronome.bpm, metronome.beats, metronome.unit
                         );
                         mvwprintw(
                             win,
                             3, 
                             (x-len)/2, 
-                            "Metronome at %.0f BPM [%d/%d]", 
-                            metronome->bpm, metronome->beats, metronome->unit
+                            "Metronome at %d BPM [%d/%d]", 
+                            metronome.bpm, metronome.beats, metronome.unit
                         );
                         wrefresh(win);
                     } break;
                     case 'l':
-                        metronome_inc_beats();
+                        metronome_inc_beats(&metronome);
                         break;
                     case 'h':
-                        metronome_dec_beats();
+                        metronome_dec_beats(&metronome);
                         break;
                     case 'L':
-                        metronome_dec_unit();
+                        metronome_dec_unit(&metronome);
                         break;
                     case 'H':
-                        metronome_inc_unit();
+                        metronome_inc_unit(&metronome);
                         break;
                     case ' ':
                         program_state = PAUSE_MODE;
@@ -348,39 +347,39 @@ int main(int argc, char **argv) {
             } 
 
             if (program_state == PAUSE_MODE) {
-                ma_device_stop(&metronome->device);
+                ma_device_stop(&metronome.device);
                 timeout(20000);
                 mvprintw(LINES -2, 0, "-- PAUSE --");
                 while(getch() != ' ') {}
                 program_state = NORMAL_MODE;
                 timeout(0);
                 //update_display(win);
-                ma_device_start(&metronome->device);
+                ma_device_start(&metronome.device);
             }
 
             if(program_state == COMMAND_MODE) {
-                if(handle_command_mode() == 1) {
+                if(handle_command_mode(&metronome) == 1) {
                     keep_running = 0x0;
                 }
                 program_state = NORMAL_MODE;
-                update_display(win);
-                ma_device_start(&metronome->device);
+                update_display(&metronome, win);
+                ma_device_start(&metronome.device);
             }
 
-            if(metronome->tick > 0) {
+            if(metronome.tick > 0) {
                 //wbkgd(win, COLOR_PAIR(1));
                 //wrefresh(win);
-                update_display(win);
+                update_display(&metronome, win);
                 //wbkgd(win, COLOR_PAIR(2));
                 //wrefresh(win);
-                metronome->tick = 0;
+                metronome.tick = 0;
             } 
             wrefresh(win);
             //usleep(1000);
         }
     }
     endwin();
-    metronome_shutdown();
+    metronome_shutdown(&metronome);
 
     return 0;
 }

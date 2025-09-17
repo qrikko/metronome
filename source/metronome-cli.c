@@ -25,22 +25,23 @@ void disable_non_canonical_mode() {
 }
 
 int main (int argc, char **argv) {
-    struct Metronome *const metronome = metronome_state();
-    metronome->bpm=120.0; 
-    metronome->base_bpm=120.0; 
-    metronome->bpm_step=0;
-    metronome->interval=0;
-    metronome->next_step = 0;
+    struct Metronome metronome;
+    metronome_setup(&metronome);
+
+    metronome.bpm=120; 
+    metronome.base_bpm=120.0; 
+    metronome.bpm_step=0;
+    metronome.interval=0;
+    metronome.next_step = 0;
 
     if(argc > 1) {
-        metronome->bpm = atoi(argv[1]);
+        metronome.bpm = atoi(argv[1]);
     }
 
     enable_non_canonical_mode();
 
-    metronome_setup();
 
-    printf("Metronome running at %.2f BPM.\n", metronome->bpm);
+    printf("Metronome running at %d BPM.\n", metronome.bpm);
 
     char input_char;
     char keep_running = 0x1;
@@ -48,10 +49,10 @@ int main (int argc, char **argv) {
         if(read(STDIN_FILENO, &input_char, 1) == 1) {
             switch(input_char) {
                 case '+':
-                    metronome->bpm++;
+                    metronome.bpm++;
                     break;
                 case '-':
-                    metronome->bpm--;
+                    metronome.bpm--;
                     break;
                 case ':':
                     printf(":");
@@ -62,26 +63,26 @@ int main (int argc, char **argv) {
                         printf("new bpm: ");
                         char value[128];
                         fscanf(stdin, "%s", value);
-                        metronome->bpm = atoi(value);
-                        metronome->base_bpm = metronome->bpm;
-                        metronome->next_step = metronome->interval;
+                        metronome.bpm = atoi(value);
+                        metronome.base_bpm = metronome.bpm;
+                        metronome.next_step = metronome.interval;
                     } else if (strcmp(cmd, "interval") == 0) {
                         {
                             printf("bpm step: ");
                             char bpm_step[3];
                             fscanf(stdin, "%s", bpm_step);
-                            metronome->bpm_step = atof(bpm_step);
+                            metronome.bpm_step = atof(bpm_step);
                         }
                         {
                             printf("measures interval: ");
                             char interval[3];
                             fscanf(stdin, "%s", interval);
-                            metronome->interval = atoi(interval);
+                            metronome.interval = atoi(interval);
                         }
-                        metronome->next_step = metronome->interval;
+                        metronome.next_step = metronome.interval;
                     }  else if (strcmp(cmd, "reset") == 0) {
-                        metronome->bpm = metronome->base_bpm;
-                        metronome->next_step = metronome->interval;
+                        metronome.bpm = metronome.base_bpm;
+                        metronome.next_step = metronome.interval;
                     }
                     else if(strcmp(cmd, "quit") == 0 || strcmp(cmd, "q") == 0) {
                         keep_running = 0x0;
@@ -90,12 +91,12 @@ int main (int argc, char **argv) {
                     break;
             }
             system("clear");
-            printf("Metronome running at %.2f BPM.\n", metronome->bpm);
+            printf("Metronome running at %d BPM.\n", metronome.bpm);
         }
         usleep(1000);
     }
 
-    metronome_shutdown();
+    metronome_shutdown(&metronome);
 
     return 0;
 }

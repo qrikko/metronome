@@ -1,30 +1,34 @@
 #include <stdint.h>
 #include <miniaudio.h>
 
+struct Practice {
+    uint8_t base_bpm;
+    uint8_t step;
+    uint8_t interval;
+};
+
 struct Metronome {
-    double bpm;
-    double base_bpm;
-    float bpm_step;
-    uint16_t interval;
-
-    uint16_t next_step;
-    uint8_t tick;
-
+    uint8_t bpm;
     uint8_t beats;
     uint8_t unit;
 
-    uint8_t reset;
+    uint8_t bpm_step;
+    uint8_t interval;
+    uint8_t next_step;
 
+    uint8_t base_bpm;
+
+    uint8_t tick;
+    uint8_t reset;
     ma_device device;
 };
 
-extern struct Metronome *metronome_state();
-extern int metronome_setup();
-extern void metronome_shutdown();
+extern int metronome_setup(struct Metronome *m);
+extern void metronome_shutdown(struct Metronome *m);
 
-extern void metronome_set_beats(const int value);
-extern void metronome_set_unit(const int value);
-extern void metronome_dec_unit();
-extern void metronome_inc_unit();
-extern void metronome_dec_beats();
-extern void metronome_inc_beats();
+extern void metronome_set_beats(struct Metronome *m, const int value);
+extern void metronome_set_unit(struct Metronome *m, const int value);
+extern void metronome_dec_unit(struct Metronome *m);
+extern void metronome_inc_unit(struct Metronome *m);
+extern void metronome_dec_beats(struct Metronome *m);
+extern void metronome_inc_beats(struct Metronome *m);

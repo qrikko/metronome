@@ -29,9 +29,9 @@
 #define MIN_NOMINATOR (2)
 #define MAX_NOMINATOR (32)
 
-static struct Metronome _metronome;
+//static struct Metronome _metronome;
 
-struct Metronome *metronome_state() { return &_metronome; }
+//struct Metronome *metronome_state() { return &_metronome; }
 
 unsigned int power_of_two(unsigned int value) {
     if(value == 0) return 1;
@@ -53,43 +53,44 @@ unsigned int power_of_two(unsigned int value) {
     return upper;
 }
 
-void metronome_set_beats(const int value) {
-    _metronome.beats = clamp(value, MIN_NOMINATOR, MAX_NOMINATOR);
+void metronome_set_beats(struct Metronome *m, const int value) {
+    m->beats = clamp(value, MIN_NOMINATOR, MAX_NOMINATOR);
 }
-void metronome_set_unit(const int value) {
-    _metronome.unit = clamp(power_of_two(value), MIN_DENOMINATOR, MAX_DENOMINATOR);
+void metronome_set_unit(struct Metronome *m, const int value) {
+    m->unit = clamp(power_of_two(value), MIN_DENOMINATOR, MAX_DENOMINATOR);
 }
-void metronome_dec_unit() {
-    _metronome.unit = min(_metronome.unit << 1, MAX_DENOMINATOR);
+void metronome_dec_unit(struct Metronome *m) {
+    m->unit = min(m->unit << 1, MAX_DENOMINATOR);
 }
-void metronome_inc_unit() { 
-    _metronome.unit = max(_metronome.unit >> 1, MIN_DENOMINATOR);
+void metronome_inc_unit(struct Metronome *m) { 
+    m->unit = max(m->unit >> 1, MIN_DENOMINATOR);
 }
-void metronome_dec_beats() {
-    _metronome.beats = max(_metronome.beats-1, MIN_NOMINATOR);
+void metronome_dec_beats(struct Metronome *m) {
+    m->beats = max(m->beats-1, MIN_NOMINATOR);
 }
-void metronome_inc_beats() {
-    _metronome.beats = min(_metronome.beats+1, MAX_NOMINATOR);
+void metronome_inc_beats(struct Metronome *m) {
+    m->beats = min(m->beats+1, MAX_NOMINATOR);
 }
 
 void data_callback(ma_device* device, void* output, const void* input, ma_uint32 frame_count) {
     float *out = (float*)output;
     (void)input;
     (void)device;
+    struct Metronome *m = device->pUserData;
 
     static double phase = 0.0;
     static unsigned int beat_sample_counter = 0;
     static unsigned int beat_counter = 0;
     static const unsigned int click_samples = (unsigned int)(0.02 * SAMPLE_RATE); // 20ms click
 
-    if (_metronome.reset == 0x1) {
+    if (m->reset == 0x1) {
         phase = 0.0;
         beat_sample_counter = 0;
         beat_counter = 0;
-        _metronome.reset = 0x0;
+        m->reset = 0x0;
     }
 
-    const double beat_duration = (60.0/_metronome.bpm) * (4.0/_metronome.unit);
+    const double beat_duration = (60.0/m->bpm) * (4.0/m->unit);
     const unsigned int beat_samples = (unsigned int)(beat_duration * SAMPLE_RATE);
                                                                                   
     for(ma_uint32 i=0; i<frame_count; ++i) {
@@ -107,43 +108,45 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         if(beat_sample_counter >= beat_samples) {
             beat_sample_counter = 0;
             phase = 0.0;
-            beat_counter = (beat_counter +1) % _metronome.beats;
+            beat_counter = (beat_counter +1) % m->beats;
 
-            _metronome.tick = beat_counter+1;
+            m->tick = beat_counter+1;
 
-            if (beat_counter == 0 && _metronome.interval > 0) {
-                if (--_metronome.next_step == 0) {
-                    _metronome.next_step = _metronome.interval;
-                    _metronome.bpm += _metronome.bpm_step;
+            if (beat_counter == 0 && m->interval > 0) {
+                if (--m->next_step == 0) {
+                    m->next_step = m->interval;
+                    m->bpm += m->bpm_step;
                 }
-                //system("clear");
-                //fprintf(stdout, "next increase in: %d measures\n", _metronome.next_step);
-                //fprintf(stdout, "Metronome running at %.2f BPM.\n", _metronome.bpm);
             }
         }
     }
 }
 
-int metronome_setup() {
-    _metronome.tick = 1;
+int metronome_setup(struct Metronome *m) {
+    m->tick = 1;
     {
-        uint8_t data[3];
+        uint8_t data[6];
         const char *home = getenv("HOME");
         const char *rel = "/.local/share/metronome.state";
         char path[128];
         sprintf(path, "%s/%s", home, rel);
         FILE *f = fopen(path, "rb");
         if (f) {
-            fread(data, sizeof(uint8_t), 3, f);
+            fread(data, sizeof(uint8_t), 6, f);
 
-            _metronome.bpm      = data[0]; 
-            _metronome.beats    = data[1];
-            _metronome.unit     = data[2];
+            m->bpm          = data[0]; 
+            m->beats        = data[1];
+            m->unit         = data[2];
+
+            m->bpm_step     = data[3];
+            m->interval     = data[4];
+            m->next_step    = data[5];
+
             fclose(f);
         } else {
-            _metronome.bpm      = 80.0;
-            _metronome.beats    = 4;
-            _metronome.unit     = 4;
+            m->bpm      = 80.0;
+            m->beats    = 4;
+            m->unit     = 4;
         }
     }
 
@@ -154,16 +157,17 @@ int metronome_setup() {
     device_config.playback.format   = ma_format_f32;
     device_config.playback.channels = 2;
     device_config.sampleRate        = SAMPLE_RATE;
+    device_config.pUserData         = m;
     device_config.dataCallback      = data_callback;
 
-    result = ma_device_init(NULL, &device_config, &_metronome.device);
+    result = ma_device_init(NULL, &device_config, &m->device);
     if(result != MA_SUCCESS) {
         printf("FAILED to OPEN playback device!\n");
         return -1;
     }
 
     // Start device
-    result = ma_device_start(&_metronome.device);
+    result = ma_device_start(&m->device);
     if(result != MA_SUCCESS) {
         printf("FAILED to START playback device\n");
         return -1;
@@ -171,7 +175,7 @@ int metronome_setup() {
     return 0;
 }
 
-void metronome_shutdown() {
-    ma_device_uninit(&_metronome.device);
+void metronome_shutdown(struct Metronome *m) {
+    ma_device_uninit(&m->device);
 }
 
