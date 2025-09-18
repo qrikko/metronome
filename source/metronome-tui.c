@@ -25,9 +25,10 @@ void init_tui() {
 void tui_print(const struct Metronome *metronome, WINDOW *win, const uint8_t y, const uint8_t x) {
     int len = snprintf(NULL, 0, "Metronome at %d BPM", metronome->bpm);
     mvwprintw(win, 3,(x-len)/2, "Metronome at %d BPM", metronome->bpm);
+    wmove(win, 4, (x-len)/2);
     for(uint8_t i=0; i<=metronome->track.size; ++i) {
-        mvwprintw(
-            win, 4+i, (x-len)/2, 
+        wprintw(
+            win, 
             "[%d/%d]",
             metronome->track.measures[metronome->track.current].beats, 
             metronome->track.measures[metronome->track.current].unit
@@ -301,6 +302,10 @@ int main(int argc, char **argv) {
                     }
                     case 'H': {
                         metronome_inc_unit(&metronome);
+                        break;
+                    }
+                    case 'o': {
+                        metronome_add_track(&metronome);
                         break;
                     }
                     case ' ': {
