@@ -54,22 +54,26 @@ unsigned int power_of_two(unsigned int value) {
 }
 
 void metronome_set_beats(struct Metronome *m, const int value) {
-    m->beats = clamp(value, MIN_NOMINATOR, MAX_NOMINATOR);
+    m->track.measures[m->track.current].beats = clamp(value, MIN_NOMINATOR, MAX_NOMINATOR);
 }
 void metronome_set_unit(struct Metronome *m, const int value) {
-    m->unit = clamp(power_of_two(value), MIN_DENOMINATOR, MAX_DENOMINATOR);
+    m->track.measures[m->track.current].unit = clamp(power_of_two(value), MIN_DENOMINATOR, MAX_DENOMINATOR);
 }
 void metronome_dec_unit(struct Metronome *m) {
-    m->unit = min(m->unit << 1, MAX_DENOMINATOR);
+    uint8_t *unit = &m->track.measures[m->track.current].unit;
+    *unit = min(*unit << 1, MAX_DENOMINATOR);
 }
 void metronome_inc_unit(struct Metronome *m) { 
-    m->unit = max(m->unit >> 1, MIN_DENOMINATOR);
+    uint8_t *unit = &m->track.measures[m->track.current].unit;
+    *unit = max(*unit >> 1, MIN_DENOMINATOR);
 }
 void metronome_dec_beats(struct Metronome *m) {
-    m->beats = max(m->beats-1, MIN_NOMINATOR);
+    uint8_t *beats = &m->track.measures[m->track.current].beats;
+    *beats = max(*beats-1, MIN_NOMINATOR);
 }
 void metronome_inc_beats(struct Metronome *m) {
-    m->beats = min(m->beats+1, MAX_NOMINATOR);
+    uint8_t *beats = &m->track.measures[m->track.current].beats;
+    *beats = min(*beats+1, MAX_NOMINATOR);
 }
 
 void data_callback(ma_device* device, void* output, const void* input, ma_uint32 frame_count) {
@@ -90,7 +94,7 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         m->reset = 0x0;
     }
 
-    const double beat_duration = (60.0/m->bpm) * (4.0/m->unit);
+    const double beat_duration = (60.0/m->bpm) * (4.0/m->track.measures[m->track.current].unit);
     const unsigned int beat_samples = (unsigned int)(beat_duration * SAMPLE_RATE);
                                                                                   
     for(ma_uint32 i=0; i<frame_count; ++i) {
@@ -108,7 +112,7 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         if(beat_sample_counter >= beat_samples) {
             beat_sample_counter = 0;
             phase = 0.0;
-            beat_counter = (beat_counter +1) % m->beats;
+            beat_counter = (beat_counter +1) % m->track.measures[m->track.current].beats;
 
             m->tick = beat_counter+1;
 
@@ -122,33 +126,40 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
     }
 }
 
+void metronome_load(struct Metronome *m) {
+    uint8_t data[6];
+    const char *home = getenv("HOME");
+    const char *rel = "/.local/share/metronome.state";
+    char path[128];
+    sprintf(path, "%s/%s", home, rel);
+    FILE *f = fopen(path, "rb");
+    if (f) {
+        fread(data, sizeof(uint8_t), 6, f);
+
+        m->bpm          = data[0]; 
+        m->track.measures[m->track.current].beats = data[1];
+        m->track.measures[m->track.current].unit = data[2];
+//        m->beats        = data[1];
+//        m->unit         = data[2];
+
+        m->bpm_step     = data[3];
+        m->interval     = data[4];
+        m->next_step    = data[5];
+
+        fclose(f);
+    } else {
+        m->bpm      = 80.0;
+        m->track.measures[0].beats    = 4;
+        m->track.measures[0].unit     = 4;
+    }
+}
+
 int metronome_setup(struct Metronome *m) {
     m->tick = 1;
-    {
-        uint8_t data[6];
-        const char *home = getenv("HOME");
-        const char *rel = "/.local/share/metronome.state";
-        char path[128];
-        sprintf(path, "%s/%s", home, rel);
-        FILE *f = fopen(path, "rb");
-        if (f) {
-            fread(data, sizeof(uint8_t), 6, f);
+    m->track.current = 0;
+    m->track.size = 0;
 
-            m->bpm          = data[0]; 
-            m->beats        = data[1];
-            m->unit         = data[2];
-
-            m->bpm_step     = data[3];
-            m->interval     = data[4];
-            m->next_step    = data[5];
-
-            fclose(f);
-        } else {
-            m->bpm      = 80.0;
-            m->beats    = 4;
-            m->unit     = 4;
-        }
-    }
+    metronome_load(m);
 
     ma_result result;
     ma_device_config device_config;
@@ -177,5 +188,10 @@ int metronome_setup(struct Metronome *m) {
 
 void metronome_shutdown(struct Metronome *m) {
     ma_device_uninit(&m->device);
+}
+void metronome_add_track(struct Metronome *m) {
+    assert(++m->track.size < 10);
+    m->track.measures[m->track.size].beats = 4;
+    m->track.measures[m->track.size].unit = 4;
 }
 

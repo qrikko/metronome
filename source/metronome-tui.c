@@ -22,6 +22,18 @@ void init_tui() {
     timeout(0);
 }
 
+void tui_print(const struct Metronome *metronome, WINDOW *win, const uint8_t y, const uint8_t x) {
+    int len = snprintf(NULL, 0, "Metronome at %d BPM", metronome->bpm);
+    mvwprintw(win, 3,(x-len)/2, "Metronome at %d BPM", metronome->bpm);
+    for(uint8_t i=0; i<=metronome->track.size; ++i) {
+        mvwprintw(
+            win, 4+i, (x-len)/2, 
+            "[%d/%d]",
+            metronome->track.measures[metronome->track.current].beats, 
+            metronome->track.measures[metronome->track.current].unit
+        );
+    }
+}
 void update_display(struct Metronome *metronome, WINDOW *win) {
     wclear(win);
 
@@ -49,25 +61,13 @@ void update_display(struct Metronome *metronome, WINDOW *win) {
         }
     }
     {
-        int len = snprintf(
-            NULL, 0, 
-            "Metronome at %d BPM [%d/%d]", 
-            metronome->bpm, metronome->beats, metronome->unit
-        );
-        mvwprintw(
-            win,
-            3,
-            //y/2, 
-            (x-len)/2, 
-            "Metronome at %d BPM [%d/%d]", 
-            metronome->bpm, metronome->beats, metronome->unit
-        );
+        tui_print(metronome, win, y, x);
 
         const int margin = 5;
-        len = getmaxx(win) -2*margin;
-        int step = len/(metronome->beats-1);
+        uint8_t len = getmaxx(win) -2*margin;
+        int step = len/(metronome->track.measures[metronome->track.current].beats-1);
 
-        for(int i=0; i<metronome->beats; ++i) {
+        for(int i=0; i<metronome->track.measures[metronome->track.current].beats; ++i) {
             mvwprintw(
                 win,
                 y/2 +1, 
@@ -208,6 +208,9 @@ int handle_command_mode(struct Metronome *metronome) {
                 metronome->next_step = metronome->interval;
                 metronome->tick = 1;
             }
+        } else if(strcmp(token, "o") == 0) {
+            metronome_add_track(metronome);
+
         } else if(strcmp(token, "reset") == 0) {
             metronome->bpm = metronome->base_bpm;
             metronome->next_step = metronome->interval;
@@ -238,40 +241,27 @@ int handle_command_mode(struct Metronome *metronome) {
     return result;
 }
 
-
 int main(int argc, char **argv) {
-    //struct Metronome *const metronome = metronome_state();
     struct Metronome metronome;
     metronome_setup(&metronome);
 
-    metronome.bpm = 80;
-    metronome.base_bpm=120.0; 
-    metronome.bpm_step=0;
-    metronome.interval=0;
-    metronome.next_step = 0;
-
-    //tick_pos.x = 10;
-    //tick_pos.y = 2;
-
     program_state_t program_state = NORMAL_MODE;
 
-    metronome_setup(&metronome);
     init_tui();
     {
         start_color();
         use_default_colors();
-
-        int ymax, xmax;
-        getmaxyx(stdscr, ymax, xmax);
-        const int margin = 10;
-        init_pair(1, COLOR_YELLOW, 0);
-        WINDOW *win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
-        wtimeout(win, 0);
-        update_display(&metronome, win);
-
-        wrefresh(win);
-        struct Coord bpm_pos = {};
-        getyx(win, bpm_pos.y, bpm_pos.x);
+        WINDOW *win;
+        {
+            int ymax, xmax;
+            getmaxyx(stdscr, ymax, xmax);
+            const int margin = 10;
+            init_pair(1, COLOR_YELLOW, 0);
+            win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
+            wtimeout(win, 0);
+            update_display(&metronome, win);
+            wrefresh(win);
+        }
 
         struct Coord input_pos = {.x=1, .y=getmaxy(stdscr)};
 
@@ -279,7 +269,6 @@ int main(int argc, char **argv) {
         while (keep_running == 0x1) {
             if(program_state == NORMAL_MODE) {
                 char cmd = wgetch(win);
-            //    char cmd = getch();
 
                 switch(cmd) {
                     case 'j':
@@ -287,18 +276,7 @@ int main(int argc, char **argv) {
                         metronome.bpm -= (cmd=='j') ? 1 : 5;
                         int x, y;
                         getmaxyx(win, y, x);
-                        int len = snprintf(
-                            NULL, 0, 
-                            "Metronome at %d BPM [%d/%d]", 
-                            metronome.bpm, metronome.beats, metronome.unit
-                        );
-                        mvwprintw(
-                            win,
-                            3, 
-                            (x-len)/2, 
-                            "Metronome at %d BPM [%d/%d]", 
-                            metronome.bpm, metronome.beats, metronome.unit
-                        );
+                        tui_print(&metronome, win, y, x);
                         wrefresh(win);
                     } break;
                     case 'k':
@@ -306,36 +284,30 @@ int main(int argc, char **argv) {
                         metronome.bpm += (cmd=='k') ? 1 : 5;
                         int x, y;
                         getmaxyx(win, y, x);
-                        int len = snprintf(
-                            NULL, 0, 
-                            "Metronome at %d BPM [%d/%d]", 
-                            metronome.bpm, metronome.beats, metronome.unit
-                        );
-                        mvwprintw(
-                            win,
-                            3, 
-                            (x-len)/2, 
-                            "Metronome at %d BPM [%d/%d]", 
-                            metronome.bpm, metronome.beats, metronome.unit
-                        );
+                        tui_print(&metronome, win, y, x);
                         wrefresh(win);
                     } break;
-                    case 'l':
+                    case 'l': {
                         metronome_inc_beats(&metronome);
                         break;
-                    case 'h':
+                    }
+                    case 'h': {
                         metronome_dec_beats(&metronome);
                         break;
-                    case 'L':
+                    }
+                    case 'L': {
                         metronome_dec_unit(&metronome);
                         break;
-                    case 'H':
+                    }
+                    case 'H': {
                         metronome_inc_unit(&metronome);
                         break;
-                    case ' ':
+                    }
+                    case ' ': {
                         program_state = PAUSE_MODE;
                         break;
-                    case ':':
+                    }
+                    case ':': {
                         program_state = COMMAND_MODE;
                         move(input_pos.y, input_pos.x);
                         printw(":");
@@ -343,6 +315,7 @@ int main(int argc, char **argv) {
                         char buffer[32];
                         getnstr(buffer, 16);
                         break;
+                    }
                 }
             } 
 
@@ -353,7 +326,6 @@ int main(int argc, char **argv) {
                 while(getch() != ' ') {}
                 program_state = NORMAL_MODE;
                 timeout(0);
-                //update_display(win);
                 ma_device_start(&metronome.device);
             }
 
@@ -375,7 +347,6 @@ int main(int argc, char **argv) {
                 metronome.tick = 0;
             } 
             wrefresh(win);
-            //usleep(1000);
         }
     }
     endwin();
