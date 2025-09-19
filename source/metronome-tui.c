@@ -290,6 +290,7 @@ int main(int argc, char **argv) {
                     } break;
                     case 'k':
                     case 'K': {
+                        metronome.bpm += (cmd=='k') ? 1 : 5;
                         tui_print(&metronome, win);
                     } break;
                     case 'l': {
@@ -331,11 +332,11 @@ int main(int argc, char **argv) {
                         if(program_state == NORMAL_MODE) {
                             program_state = PAUSE_MODE;
                             ma_device_stop(&metronome.device);
-//                            timeout(20000);
                         } else if(program_state == PAUSE_MODE) {
                             program_state = NORMAL_MODE;
+                            metronome.reset = 1;
+                            metronome.tick = 1;
                             ma_device_start(&metronome.device);
-                            //timeout(0);
                         }
                         update_display(&metronome, win, mode_string(program_state));
 
