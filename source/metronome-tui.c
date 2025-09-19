@@ -35,16 +35,35 @@ void tui_print(const struct Metronome *metronome, WINDOW *win) {
     int x, y;
     getmaxyx(win, y, x);
     int len = snprintf(NULL, 0, "Metronome at %d BPM", metronome->bpm);
-    mvwprintw(win, 3,(x-len)/2, "Metronome at %d BPM", metronome->bpm);
-    wmove(win, 4, (x-len)/2);
+    int left = (x-len)/2;
+
+    wmove(win, 5, 0);
+    wclrtoeol(win);
+    mvwprintw(win, 3, left, "Metronome at %d BPM", metronome->bpm);
+    wclrtoeol(win);
     for(uint8_t i=0; i<=metronome->track.size; ++i) {
+        uint8_t b = metronome->track.measures[i].beats;
+        uint8_t u = metronome->track.measures[i].unit;
+        int offset = snprintf(NULL, 0, "[%d/%d]", b, u);
+
+        wmove(win, 4, left);
+        int selected = (metronome->track.selected == i);
+        if (selected) {
+            wattron(win, COLOR_PAIR(2));
+            //wattron(win, A_UNDERLINE);
+        }
         wprintw(
             win, 
             "[%d/%d]",
-            metronome->track.measures[metronome->track.current].beats, 
-            metronome->track.measures[metronome->track.current].unit
+            metronome->track.measures[i].beats, 
+            metronome->track.measures[i].unit
         );
+        if (selected) {
+            wattroff(win, COLOR_PAIR(2));
+        }
+        left+=offset;
     }
+    box(win, 0, 0);
     wrefresh(win);
 }
 void update_display(struct Metronome *metronome, WINDOW *win, const char *mode) {
@@ -77,9 +96,9 @@ void update_display(struct Metronome *metronome, WINDOW *win, const char *mode) 
 
         const int margin = 5;
         uint8_t len = getmaxx(win) -2*margin;
-        int step = len/(metronome->track.measures[metronome->track.current].beats-1);
+        int step = len/(metronome->track.measures[metronome->track.selected].beats-1);
 
-        for(int i=0; i<metronome->track.measures[metronome->track.current].beats; ++i) {
+        for(int i=0; i<metronome->track.measures[metronome->track.selected].beats; ++i) {
             mvwprintw(
                 win,
                 y/2 +1, 
@@ -95,7 +114,6 @@ void update_display(struct Metronome *metronome, WINDOW *win, const char *mode) 
             "^" 
         );
         if (metronome->tick == 1) {
-            init_pair(1, COLOR_YELLOW, -1);
             wbkgd(win, COLOR_PAIR(1));
         } else {
             wbkgd(win, 0);
@@ -268,7 +286,8 @@ int main(int argc, char **argv) {
             int ymax, xmax;
             getmaxyx(stdscr, ymax, xmax);
             const int margin = 10;
-            init_pair(1, COLOR_YELLOW, 0);
+            init_pair(1, COLOR_YELLOW, -1);
+            init_pair(2, COLOR_RED, COLOR_BLACK);
             win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
             wtimeout(win, 0);
             update_display(&metronome, win, mode_string(program_state));
@@ -283,6 +302,24 @@ int main(int argc, char **argv) {
                 char cmd = wgetch(win);
 
                 switch(cmd) {
+                    case 'n': {
+                        if(program_state == PAUSE_MODE) {
+                            metronome.track.selected = metronome.track.selected < metronome.track.size
+                                ? metronome.track.selected+1
+                                : 0;
+                            tui_print(&metronome, win);
+                        }
+                        break;
+                    }
+                    case 'p': {
+                        if(program_state == PAUSE_MODE) {
+                            metronome.track.selected = metronome.track.selected > 0 
+                                ? metronome.track.selected-1 
+                                : metronome.track.size;
+                            tui_print(&metronome, win);
+                        }
+                        break;
+                    }
                     case 'j':
                     case 'J': {
                         metronome.bpm -= (cmd=='j') ? 1 : 5;
@@ -336,6 +373,7 @@ int main(int argc, char **argv) {
                             program_state = NORMAL_MODE;
                             metronome.reset = 1;
                             metronome.tick = 1;
+                            metronome.track.selected = 0;
                             ma_device_start(&metronome.device);
                         }
                         update_display(&metronome, win, mode_string(program_state));

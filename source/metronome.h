@@ -14,7 +14,7 @@ struct Measure {
 
 struct Track {
     struct Measure measures[10];
-    uint8_t current;
+    uint8_t selected;
     uint8_t size;
 };
 
