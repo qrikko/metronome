@@ -12,6 +12,15 @@ struct Coord { int x, y; };
 //static struct Coord tick_pos;
 
 typedef enum {NORMAL_MODE, COMMAND_MODE, PAUSE_MODE} program_state_t;
+const char* mode_string(const program_state_t mode) {
+    switch(mode) {
+        case NORMAL_MODE:   return "-- NORMAL --";
+        case PAUSE_MODE:    return "-- PAUSE --";
+        case COMMAND_MODE:  return "-- COMMAND --";
+        default:            return "-- UNKNOWN --";
+    }
+}
+
 
 void init_tui() {
     initscr();
@@ -22,7 +31,9 @@ void init_tui() {
     timeout(0);
 }
 
-void tui_print(const struct Metronome *metronome, WINDOW *win, const uint8_t y, const uint8_t x) {
+void tui_print(const struct Metronome *metronome, WINDOW *win) {
+    int x, y;
+    getmaxyx(win, y, x);
     int len = snprintf(NULL, 0, "Metronome at %d BPM", metronome->bpm);
     mvwprintw(win, 3,(x-len)/2, "Metronome at %d BPM", metronome->bpm);
     wmove(win, 4, (x-len)/2);
@@ -34,8 +45,9 @@ void tui_print(const struct Metronome *metronome, WINDOW *win, const uint8_t y, 
             metronome->track.measures[metronome->track.current].unit
         );
     }
+    wrefresh(win);
 }
-void update_display(struct Metronome *metronome, WINDOW *win) {
+void update_display(struct Metronome *metronome, WINDOW *win, const char *mode) {
     wclear(win);
 
     box(win, 0, 0);
@@ -54,7 +66,6 @@ void update_display(struct Metronome *metronome, WINDOW *win) {
             mvwprintw(
                 win,
                 2,
-                //y/2 -1, 
                 (x-len)/2, 
                 "Increase BPM by %d in %d measures", 
                 metronome->bpm_step, metronome->next_step
@@ -62,7 +73,7 @@ void update_display(struct Metronome *metronome, WINDOW *win) {
         }
     }
     {
-        tui_print(metronome, win, y, x);
+        tui_print(metronome, win);
 
         const int margin = 5;
         uint8_t len = getmaxx(win) -2*margin;
@@ -93,7 +104,7 @@ void update_display(struct Metronome *metronome, WINDOW *win) {
         //wrefresh(win);
     }
 
-    mvwprintw(stdscr, LINES -2, 0, "-- NORMAL --");
+    mvwprintw(stdscr, LINES -2, 0, mode);//"-- NORMAL --");
     refresh();
     wrefresh(win);
 }
@@ -260,7 +271,7 @@ int main(int argc, char **argv) {
             init_pair(1, COLOR_YELLOW, 0);
             win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
             wtimeout(win, 0);
-            update_display(&metronome, win);
+            update_display(&metronome, win, mode_string(program_state));
             wrefresh(win);
         }
 
@@ -268,48 +279,42 @@ int main(int argc, char **argv) {
 
         uint8_t keep_running = 0x1;
         while (keep_running == 0x1) {
-            if(program_state == NORMAL_MODE) {
+            if(program_state == NORMAL_MODE || program_state == PAUSE_MODE) {
                 char cmd = wgetch(win);
 
                 switch(cmd) {
                     case 'j':
                     case 'J': {
                         metronome.bpm -= (cmd=='j') ? 1 : 5;
-                        int x, y;
-                        getmaxyx(win, y, x);
-                        tui_print(&metronome, win, y, x);
-                        wrefresh(win);
+                        tui_print(&metronome, win);
                     } break;
                     case 'k':
                     case 'K': {
-                        metronome.bpm += (cmd=='k') ? 1 : 5;
-                        int x, y;
-                        getmaxyx(win, y, x);
-                        tui_print(&metronome, win, y, x);
-                        wrefresh(win);
+                        tui_print(&metronome, win);
                     } break;
                     case 'l': {
                         metronome_inc_beats(&metronome);
+                        tui_print(&metronome, win);
                         break;
                     }
                     case 'h': {
                         metronome_dec_beats(&metronome);
+                        tui_print(&metronome, win);
                         break;
                     }
                     case 'L': {
                         metronome_dec_unit(&metronome);
+                        tui_print(&metronome, win);
                         break;
                     }
                     case 'H': {
                         metronome_inc_unit(&metronome);
+                        tui_print(&metronome, win);
                         break;
                     }
                     case 'o': {
                         metronome_add_track(&metronome);
-                        break;
-                    }
-                    case ' ': {
-                        program_state = PAUSE_MODE;
+                        tui_print(&metronome, win);
                         break;
                     }
                     case ':': {
@@ -319,34 +324,39 @@ int main(int argc, char **argv) {
                         refresh();
                         char buffer[32];
                         getnstr(buffer, 16);
+                        update_display(&metronome, win, mode_string(program_state));
+                        break;
+                    }
+                    case ' ': {
+                        if(program_state == NORMAL_MODE) {
+                            program_state = PAUSE_MODE;
+                            ma_device_stop(&metronome.device);
+//                            timeout(20000);
+                        } else if(program_state == PAUSE_MODE) {
+                            program_state = NORMAL_MODE;
+                            ma_device_start(&metronome.device);
+                            //timeout(0);
+                        }
+                        update_display(&metronome, win, mode_string(program_state));
+
                         break;
                     }
                 }
             } 
-
-            if (program_state == PAUSE_MODE) {
-                ma_device_stop(&metronome.device);
-                timeout(20000);
-                mvprintw(LINES -2, 0, "-- PAUSE --");
-                while(getch() != ' ') {}
-                program_state = NORMAL_MODE;
-                timeout(0);
-                ma_device_start(&metronome.device);
-            }
 
             if(program_state == COMMAND_MODE) {
                 if(handle_command_mode(&metronome) == 1) {
                     keep_running = 0x0;
                 }
                 program_state = NORMAL_MODE;
-                update_display(&metronome, win);
+                update_display(&metronome, win, mode_string(program_state));
                 ma_device_start(&metronome.device);
             }
 
             if(metronome.tick > 0) {
                 //wbkgd(win, COLOR_PAIR(1));
                 //wrefresh(win);
-                update_display(&metronome, win);
+                update_display(&metronome, win, mode_string(program_state));
                 //wbkgd(win, COLOR_PAIR(2));
                 //wrefresh(win);
                 metronome.tick = 0;
