@@ -393,11 +393,7 @@ int main(int argc, char **argv) {
             }
 
             if(metronome.tick > 0) {
-                //wbkgd(win, COLOR_PAIR(1));
-                //wrefresh(win);
                 update_display(&metronome, win, mode_string(program_state));
-                //wbkgd(win, COLOR_PAIR(2));
-                //wrefresh(win);
                 metronome.tick = 0;
             } 
             wrefresh(win);
