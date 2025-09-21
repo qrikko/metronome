@@ -120,10 +120,11 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
             
             m->tick = beat_counter+1;
 
-            if (beat_counter == 0 && m->interval > 0) {
-                if (--m->next_step == 0) {
-                    m->next_step = m->interval;
-                    m->bpm += m->bpm_step;
+            if (beat_counter == 0 && m->practice_active) {
+                struct Practice *p = &m->practice[m->practice_current];
+                if(--p->measures_until_next_step == 0) {
+                    p->measures_until_next_step = p->interval;
+                    m->bpm += p->bpm_step;
                 }
             }
         }
@@ -143,12 +144,8 @@ void metronome_load(struct Metronome *m) {
         m->bpm          = data[0]; 
         m->track.measures[m->track.selected].beats = data[1];
         m->track.measures[m->track.selected].unit = data[2];
-//        m->beats        = data[1];
-//        m->unit         = data[2];
 
         m->bpm_step     = data[3];
-        m->interval     = data[4];
-        m->next_step    = data[5];
 
         fclose(f);
     } else {

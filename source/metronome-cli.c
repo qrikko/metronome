@@ -31,8 +31,6 @@ int main (int argc, char **argv) {
     metronome.bpm=120; 
     metronome.base_bpm=120.0; 
     metronome.bpm_step=0;
-    metronome.interval=0;
-    metronome.next_step = 0;
 
     if(argc > 1) {
         metronome.bpm = atoi(argv[1]);
@@ -65,24 +63,24 @@ int main (int argc, char **argv) {
                         fscanf(stdin, "%s", value);
                         metronome.bpm = atoi(value);
                         metronome.base_bpm = metronome.bpm;
-                        metronome.next_step = metronome.interval;
+                        //metronome.next_step = metronome.interval;
                     } else if (strcmp(cmd, "interval") == 0) {
                         {
                             printf("bpm step: ");
                             char bpm_step[3];
                             fscanf(stdin, "%s", bpm_step);
-                            metronome.bpm_step = atof(bpm_step);
+                            //metronome.bpm_step = atof(bpm_step);
                         }
                         {
                             printf("measures interval: ");
                             char interval[3];
                             fscanf(stdin, "%s", interval);
-                            metronome.interval = atoi(interval);
+                            //metronome.interval = atoi(interval);
                         }
-                        metronome.next_step = metronome.interval;
+                        //metronome.next_step = metronome.interval;
                     }  else if (strcmp(cmd, "reset") == 0) {
                         metronome.bpm = metronome.base_bpm;
-                        metronome.next_step = metronome.interval;
+                        //metronome.next_step = metronome.interval;
                     }
                     else if(strcmp(cmd, "quit") == 0 || strcmp(cmd, "q") == 0) {
                         keep_running = 0x0;
