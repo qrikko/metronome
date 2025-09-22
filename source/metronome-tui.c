@@ -40,13 +40,13 @@ void tui_print(const struct Metronome *m, WINDOW *win) {
     wclrtoeol(win);
     mvwprintw(win, 3, left, "Metronome at %d BPM", m->bpm);
     wclrtoeol(win);
-    for(uint8_t i=0; i<=m->track.size; ++i) {
+    for(uint8_t i=0; i<=m->track.measure_count; ++i) {
         uint8_t b = m->track.measures[i].beats;
         uint8_t u = m->track.measures[i].unit;
         int offset = snprintf(NULL, 0, "[%d/%d]", b, u);
 
         wmove(win, 4, left);
-        int selected = (m->track.selected == i);
+        int selected = (m->track.active_measure == i);
         if (selected) {
             wattron(win, COLOR_PAIR(2));
             //wattron(win, A_UNDERLINE);
@@ -71,11 +71,14 @@ void print_practice_info(const struct Metronome *m, WINDOW *win) {
     int x, y;
     getmaxyx(win, y, x);
 
-    const char *format = "Increase BPM by %d in %d measures (from %d to %d, every %d measure)";
+    const struct Track *t = &m->track;
+    const int measures_left = p->interval - p->iteration;
+
+    const char *format = "Adding %d BPM in %d repititions";
     int len = snprintf(
         NULL, 0, 
         format, 
-        p->bpm_step, p->measures_until_next_step, p->bpm_from, p->bpm_to, p->interval
+        p->bpm_step, measures_left//, p->bpm_from, p->bpm_to, p->interval
     );
 
     if (p->interval > 0) {
@@ -84,7 +87,7 @@ void print_practice_info(const struct Metronome *m, WINDOW *win) {
             2,
             (x-len)/2, 
             format, 
-            p->bpm_step, p->measures_until_next_step, p->bpm_from, p->bpm_to, p->interval
+            p->bpm_step, measures_left//, p->bpm_from, p->bpm_to, p->interval
         );
     }
     wrefresh(win);
@@ -108,9 +111,9 @@ void update_display(struct Metronome *m, WINDOW *win, const char *mode) {
 
         const int margin = 5;
         uint8_t len = getmaxx(win) -2*margin;
-        int step = len/(m->track.measures[m->track.selected].beats-1);
+        int step = len/(m->track.measures[m->track.active_measure].beats-1);
 
-        for(int i=0; i<m->track.measures[m->track.selected].beats; ++i) {
+        for(int i=0; i<m->track.measures[m->track.active_measure].beats; ++i) {
             mvwprintw(
                 win,
                 y/2 +1, 
@@ -224,33 +227,32 @@ int handle_command_mode(struct Metronome *m) {
                     m->practice_active = 0x0;
                     m->tick = 1;
                     m->practice[m->practice_current].interval = 0;
-                    m->practice[m->practice_current].measures_until_next_step = 0;
                 }
             } else {
-                struct Practice p;
-                move(LINES-1, 0);
-                clrtoeol();
-                printw(":from bpm = ");
-                refresh();
+                struct Practice p = {.iteration=0};
                 {
+                    move(LINES-1, 0);
+                    clrtoeol();
+                    printw(":from bpm = ");
+                    refresh();
                     char bpm_step_str[3];
                     wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
                     p.bpm_from = (float)atoi(bpm_step_str);
                 }
-                move(LINES-1, 0);
-                clrtoeol();
-                printw(":to bpm = ");
-                refresh();
                 {
+                    move(LINES-1, 0);
+                    clrtoeol();
+                    printw(":to bpm = ");
+                    refresh();
                     char bpm_step_str[3];
                     wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
                     p.bpm_to = (float)atoi(bpm_step_str);
                 }
-                move(LINES-1, 0);
-                clrtoeol();
-                printw(":bpm step = ");
-                refresh();
                 {
+                    move(LINES-1, 0);
+                    clrtoeol();
+                    printw(":bpm step = ");
+                    refresh();
                     char bpm_step_str[3];
                     wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
                     p.bpm_step = (float)atoi(bpm_step_str);
@@ -267,9 +269,11 @@ int handle_command_mode(struct Metronome *m) {
                 m->reset = 0x1;
                 m->tick = 1;
                 m->practice_current = m->practice_count;
+                m->bpm = p.bpm_from;
 
-                p.measures_until_next_step = p.interval;
                 memcpy(&m->practice[m->practice_count++], &p, sizeof(p));
+
+                m->track.active_measure = 0;
                 m->practice_active = 0x1;
             }
         } else if(strcmp(token, "o") == 0) {
@@ -338,8 +342,8 @@ int main(int argc, char **argv) {
                 switch(cmd) {
                     case 'n': {
                         if(program_state == PAUSE_MODE) {
-                            metronome.track.selected = metronome.track.selected < metronome.track.size
-                                ? metronome.track.selected+1
+                            metronome.track.active_measure = metronome.track.active_measure < metronome.track.measure_count
+                                ? metronome.track.active_measure+1
                                 : 0;
                             tui_print(&metronome, win);
                         }
@@ -347,9 +351,9 @@ int main(int argc, char **argv) {
                     }
                     case 'p': {
                         if(program_state == PAUSE_MODE) {
-                            metronome.track.selected = metronome.track.selected > 0 
-                                ? metronome.track.selected-1 
-                                : metronome.track.size;
+                            metronome.track.active_measure = metronome.track.active_measure > 0 
+                                ? metronome.track.active_measure-1 
+                                : metronome.track.measure_count;
                             tui_print(&metronome, win);
                         }
                         break;
@@ -407,7 +411,7 @@ int main(int argc, char **argv) {
                             program_state = NORMAL_MODE;
                             metronome.reset = 1;
                             metronome.tick = 1;
-                            metronome.track.selected = 0;
+                            metronome.track.active_measure = 0;
                             ma_device_start(&metronome.device);
                         }
                         update_display(&metronome, win, mode_string(program_state));

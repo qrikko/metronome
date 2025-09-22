@@ -12,8 +12,8 @@ struct Measure {
 
 struct Track {
     struct Measure measures[MAX_MEASURES_PER_TRACK];
-    uint8_t selected;
-    uint8_t size;
+    uint8_t active_measure;
+    uint8_t measure_count;
 };
 
 struct Practice {
@@ -21,7 +21,7 @@ struct Practice {
     uint8_t bpm_to;
     uint8_t bpm_step;
     uint8_t interval;
-    uint8_t measures_until_next_step;
+    uint8_t iteration;
 };
 
 struct Metronome {
