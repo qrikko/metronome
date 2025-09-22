@@ -59,21 +59,21 @@ void metronome_set_beats(struct Metronome *m, const int value) {
 void metronome_set_unit(struct Metronome *m, const int value) {
     m->track.measures[m->track.active_measure].unit = clamp(power_of_two(value), MIN_DENOMINATOR, MAX_DENOMINATOR);
 }
-void metronome_dec_unit(struct Metronome *m) {
+void metronome_inc_unit(struct Metronome *m) { 
     uint8_t *unit = &m->track.measures[m->track.active_measure].unit;
     *unit = min(*unit << 1, MAX_DENOMINATOR);
 }
-void metronome_inc_unit(struct Metronome *m) { 
+void metronome_dec_unit(struct Metronome *m) {
     uint8_t *unit = &m->track.measures[m->track.active_measure].unit;
     *unit = max(*unit >> 1, MIN_DENOMINATOR);
-}
-void metronome_dec_beats(struct Metronome *m) {
-    uint8_t *beats = &m->track.measures[m->track.active_measure].beats;
-    *beats = max(*beats-1, MIN_NOMINATOR);
 }
 void metronome_inc_beats(struct Metronome *m) {
     uint8_t *beats = &m->track.measures[m->track.active_measure].beats;
     *beats = min(*beats+1, MAX_NOMINATOR);
+}
+void metronome_dec_beats(struct Metronome *m) {
+    uint8_t *beats = &m->track.measures[m->track.active_measure].beats;
+    *beats = max(*beats-1, MIN_NOMINATOR);
 }
 
 void data_callback(ma_device* device, void* output, const void* input, ma_uint32 frame_count) {

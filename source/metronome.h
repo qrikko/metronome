@@ -12,6 +12,7 @@ struct Measure {
 
 struct Track {
     struct Measure measures[MAX_MEASURES_PER_TRACK];
+    uint8_t selection;
     uint8_t active_measure;
     uint8_t measure_count;
 };
