@@ -128,7 +128,7 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
                     p->iteration++;
                 }
 
-                if(p->iteration > (m->track.measure_count * p->interval)-1) {
+                if(p->iteration > p->interval-1) {
                     m->bpm += p->bpm_step;
                     p->iteration = 0;
                 }
