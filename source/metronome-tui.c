@@ -10,8 +10,8 @@
 
 struct Coord { int x, y; };
 
-typedef enum {NORMAL_MODE, COMMAND_MODE, PAUSE_MODE} ProgramState;
-const char* mode_string(const ProgramState mode) {
+typedef enum {NORMAL_MODE, COMMAND_MODE, PAUSE_MODE} ProgramMode;
+const char* mode_string(const ProgramMode mode) {
     switch(mode) {
         case NORMAL_MODE:   return "-- NORMAL --";
         case PAUSE_MODE:    return "-- PAUSE --";
@@ -20,7 +20,7 @@ const char* mode_string(const ProgramState mode) {
     }
 }
 
-typedef enum {BEAT_SELECTED, UNIT_SELECTED, MEASURE_NONE_SELECTED} MeaureSelection;
+typedef enum {BEAT_SELECTED, UNIT_SELECTED, BPM_SELECTED, NONE_SELECTED} SelectionState;
 
 void init_tui() {
     initscr();
@@ -31,20 +31,25 @@ void init_tui() {
     timeout(0);
 }
 
-void tui_print(const struct Metronome *m, WINDOW *win, const ProgramState state) {
+void tui_print(const struct Metronome *m, WINDOW *win, const ProgramMode mode, const SelectionState state) {
     int x, y;
     getmaxyx(win, y, x);
-    int len = snprintf(NULL, 0, "Metronome at %d BPM", m->bpm);
-    int left = (x-len)/2;
-
     wmove(win, 5, 0);
     wclrtoeol(win);
-    mvwprintw(win, 3, left, "Metronome at %d BPM", m->bpm);
     wclrtoeol(win);
     wmove(win, 4, 0);
     wclrtoeol(win);
 
-    MeaureSelection selection = (state == PAUSE_MODE) ? m->track.selection : MEASURE_NONE_SELECTED;
+    SelectionState selection = (mode==PAUSE_MODE) ? state : NONE_SELECTED;
+
+    int len = snprintf(NULL, 0, "Metronome at %d BPM", m->bpm);
+    int left = (x-len)/2;
+
+    mvwprintw(win, 3, left, "Metronome at ");
+    if(selection == BPM_SELECTED) { wattron(win, COLOR_PAIR(2)); wattron(win, A_UNDERLINE); }
+    wprintw(win, "%d", m->bpm);
+    if(selection == BPM_SELECTED) { wattroff(win, COLOR_PAIR(2)); wattroff(win, A_UNDERLINE); }
+    wprintw(win, " BPM");
 
     for(uint8_t i=0; i<=m->track.measure_count; ++i) {
         uint8_t b = m->track.measures[i].beats;
@@ -53,7 +58,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramState state)
 
         wmove(win, 4, left);
         int selected_measure = (m->track.active_measure == i);
-        if (selected_measure) { wattron(win, COLOR_PAIR(2)); }
+        if (selected_measure && state<BPM_SELECTED) { wattron(win, COLOR_PAIR(2)); }
         wprintw(win, "[");
 
         if(selected_measure && selection == BEAT_SELECTED) { wattron(win, A_UNDERLINE); }
@@ -68,7 +73,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramState state)
 
         wprintw(win, "]");
 
-        if (selected_measure) { wattroff(win, COLOR_PAIR(2)); }
+        if (selected_measure && state<BPM_SELECTED) { wattroff(win, COLOR_PAIR(2)); }
         left+=offset;
     }
     box(win, 0, 0);
@@ -103,7 +108,7 @@ void print_practice_info(const struct Metronome *m, WINDOW *win) {
 }
 
 
-void update_display(struct Metronome *m, WINDOW *win, const ProgramState mode) {
+void update_display(struct Metronome *m, WINDOW *win, const ProgramMode mode) {
     wclear(win);
 
     box(win, 0, 0);
@@ -116,7 +121,7 @@ void update_display(struct Metronome *m, WINDOW *win, const ProgramState mode) {
     }
 
     {
-        tui_print(m, win, mode);
+        tui_print(m, win, mode, NONE_SELECTED);
 
         const int margin = 5;
         uint8_t len = getmaxx(win) -2*margin;
@@ -322,7 +327,8 @@ int main(int argc, char **argv) {
     struct Metronome metronome;
     metronome_setup(&metronome);
 
-    ProgramState program_state = NORMAL_MODE;
+    ProgramMode program_mode = NORMAL_MODE;
+    SelectionState input_selection = NONE_SELECTED;
 
     init_tui();
     {
@@ -337,7 +343,7 @@ int main(int argc, char **argv) {
             init_pair(2, COLOR_RED, COLOR_BLACK);
             win = newwin(ymax/2, xmax-2*margin, ymax/4, margin);
             wtimeout(win, 0);
-            update_display(&metronome, win, program_state);
+            update_display(&metronome, win, program_mode);
             wrefresh(win);
         }
 
@@ -345,132 +351,150 @@ int main(int argc, char **argv) {
 
         uint8_t keep_running = 0x1;
         while (keep_running == 0x1) {
-            if(program_state == NORMAL_MODE || program_state == PAUSE_MODE) {
+            if(program_mode == NORMAL_MODE || program_mode == PAUSE_MODE) {
                 char cmd = wgetch(win);
 
                 switch(cmd) {
                     case 'n': {
-                        if(program_state == PAUSE_MODE) {
+                        if(program_mode == PAUSE_MODE) {
                             metronome.track.active_measure = 
                                 metronome.track.active_measure < metronome.track.measure_count
                                 ? metronome.track.active_measure+1
                                 : 0;
-                            tui_print(&metronome, win, program_state);
+                            tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
                     }
                     case 'p': {
-                        if(program_state == PAUSE_MODE) {
+                        if(program_mode == PAUSE_MODE) {
                             metronome.track.active_measure = metronome.track.active_measure > 0 
                                 ? metronome.track.active_measure-1 
                                 : metronome.track.measure_count;
-                            tui_print(&metronome, win, program_state);
+                            tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
                     }
                     //case 'J':
                     case 'j': {
-                        if(program_state == PAUSE_MODE) {
-                            if(metronome.track.selection == 0) {
+                        if(program_mode == PAUSE_MODE) {
+                            if(input_selection == BEAT_SELECTED) {
                                 metronome_dec_beats(&metronome);
-                            } else {
+                            } else if(input_selection == UNIT_SELECTED) {
                                 metronome_dec_unit(&metronome);
+                            } else if(input_selection == BPM_SELECTED) {
+                                metronome.bpm--;
                             }
                         }
                         //metronome.bpm -= (cmd=='j') ? 1 : 5;
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     } 
                     //case 'K':
                     case 'k': {
-                        if(program_state == PAUSE_MODE) {
-                            if(metronome.track.selection == 0) {
+                        if(program_mode == PAUSE_MODE) {
+                            if(input_selection == BEAT_SELECTED) {
                                 metronome_inc_beats(&metronome);
-                            } else {
+                            } else if(input_selection == UNIT_SELECTED) {
                                 metronome_inc_unit(&metronome);
+                            } else if(input_selection == BPM_SELECTED) {
+                                metronome.bpm++;
                             }
                         }
                         //metronome.bpm += (cmd=='k') ? 1 : 5;
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     } 
                     case 'h': {
-                        if(program_state == PAUSE_MODE) {
-                            metronome.track.selection = metronome.track.selection==1 ? 0 : 1;
-                        } else {
-                            metronome_dec_beats(&metronome);
+                        if(program_mode == PAUSE_MODE) {
+                            if(input_selection<BPM_SELECTED) {
+                                input_selection = input_selection==UNIT_SELECTED ? BEAT_SELECTED : UNIT_SELECTED;
+                            } else if(input_selection == BPM_SELECTED) {
+                                metronome.bpm -= 5;
+                            }
                         }
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case 'l': {
-                        if(program_state == PAUSE_MODE) {
-                            metronome.track.selection = metronome.track.selection==0 ? 1 : 0;
-                        } else {
-                            metronome_inc_beats(&metronome);
+                        if(program_mode == PAUSE_MODE) {
+                            if(input_selection<BPM_SELECTED) {
+                                input_selection = input_selection==BEAT_SELECTED ? UNIT_SELECTED : BEAT_SELECTED;
+                            } else if(input_selection==BPM_SELECTED) {
+                                metronome.bpm += 5;
+                            }
                         }
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case 'L': {
                         metronome_dec_unit(&metronome);
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case 'H': {
                         metronome_inc_unit(&metronome);
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case 'o': {
                         metronome_add_measure(&metronome);
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case 'd': {
                         metronome_remove_measure(&metronome);
-                        tui_print(&metronome, win, program_state);
+                        tui_print(&metronome, win, program_mode, input_selection);
+                        break;
+                    }
+                    case '\t': {
+                        input_selection = 
+                            (input_selection >= BPM_SELECTED) 
+                            ? BEAT_SELECTED : BPM_SELECTED
+                        ;
+                        tui_print(&metronome, win, program_mode, input_selection);
                         break;
                     }
                     case ':': {
-                        program_state = COMMAND_MODE;
+                        program_mode = COMMAND_MODE;
                         move(input_pos.y, input_pos.x);
                         printw(":");
                         refresh();
                         char buffer[32];
                         getnstr(buffer, 16);
-                        update_display(&metronome, win, program_state);
+                        update_display(&metronome, win, program_mode);
                         break;
                     }
                     case ' ': {
-                        if(program_state == NORMAL_MODE) {
-                            program_state = PAUSE_MODE;
+                        if(program_mode == NORMAL_MODE) {
+                            program_mode = PAUSE_MODE;
+                            input_selection = BEAT_SELECTED;
                             ma_device_stop(&metronome.device);
-                        } else if(program_state == PAUSE_MODE) {
-                            program_state = NORMAL_MODE;
+                            tui_print(&metronome, win, program_mode, input_selection);
+                        } else if(program_mode == PAUSE_MODE) {
+                            program_mode = NORMAL_MODE;
                             metronome.reset = 1;
                             metronome.tick = 1;
                             metronome.track.active_measure = 0;
                             ma_device_start(&metronome.device);
                         }
-                        update_display(&metronome, win, program_state);
+                        //update_display(&metronome, win, program_mode);
 
                         break;
                     }
                 }
             } 
 
-            if(program_state == COMMAND_MODE) {
+            if(program_mode == COMMAND_MODE) {
                 if(handle_command_mode(&metronome) == 1) {
                     keep_running = 0x0;
                 }
-                program_state = NORMAL_MODE;
-                update_display(&metronome, win, program_state);
+                program_mode = NORMAL_MODE;
+                update_display(&metronome, win, program_mode);
                 ma_device_start(&metronome.device);
             }
 
             if(metronome.tick > 0) {
-                update_display(&metronome, win, program_state);
+                update_display(&metronome, win, program_mode);
                 metronome.tick = 0;
             } 
             wrefresh(win);
