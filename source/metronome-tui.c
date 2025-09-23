@@ -41,6 +41,8 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramState state)
     wclrtoeol(win);
     mvwprintw(win, 3, left, "Metronome at %d BPM", m->bpm);
     wclrtoeol(win);
+    wmove(win, 4, 0);
+    wclrtoeol(win);
 
     MeaureSelection selection = (state == PAUSE_MODE) ? m->track.selection : MEASURE_NONE_SELECTED;
 
@@ -284,7 +286,7 @@ int handle_command_mode(struct Metronome *m) {
                 m->practice_active = 0x1;
             }
         } else if(strcmp(token, "o") == 0) {
-            metronome_add_track(m);
+            metronome_add_measure(m);
 
         } else if(strcmp(token, "reset") == 0) {
             m->bpm = m->base_bpm;
@@ -421,7 +423,12 @@ int main(int argc, char **argv) {
                         break;
                     }
                     case 'o': {
-                        metronome_add_track(&metronome);
+                        metronome_add_measure(&metronome);
+                        tui_print(&metronome, win, program_state);
+                        break;
+                    }
+                    case 'd': {
+                        metronome_remove_measure(&metronome);
                         tui_print(&metronome, win, program_state);
                         break;
                     }

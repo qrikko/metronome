@@ -202,10 +202,17 @@ int metronome_setup(struct Metronome *m) {
 void metronome_shutdown(struct Metronome *m) {
     ma_device_uninit(&m->device);
 }
-void metronome_add_track(struct Metronome *m) {
+void metronome_add_measure(struct Metronome *m) {
     assert(++m->track.measure_count < 10);
     m->track.measures[m->track.measure_count].beats = 4;
     m->track.measures[m->track.measure_count].unit = 4;
     m->track.active_measure++;
 }
 
+void metronome_remove_measure(struct Metronome *m) {
+    assert(m->track.measure_count > 0);
+    for(int i=m->track.active_measure; i<=m->track.measure_count; ++i) {
+        m->track.measures[i] = m->track.measures[i+1];
+    }
+    m->track.measure_count--;
+}
