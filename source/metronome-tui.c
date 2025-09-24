@@ -244,41 +244,97 @@ int handle_command_mode(struct Metronome *m) {
                 }
             } else {
                 struct Practice p = {.iteration=0};
-                {
-                    move(LINES-1, 0);
-                    clrtoeol();
-                    printw(":from bpm = ");
-                    refresh();
-                    char bpm_step_str[3];
-                    wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
-                    p.bpm_from = (float)atoi(bpm_step_str);
+                { // From bpm
+                    char bpm_step_str[4];
+                    uint16_t bpm_step = 0;
+
+                    while(bpm_step<1 || bpm_step>254) {
+                        move(LINES-1, 0);
+                        clrtoeol();
+                        printw(":from bpm = ");
+                        refresh();
+
+                        wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
+                        bpm_step = atoi(bpm_step_str);
+
+                        if(bpm_step<1 || bpm_step>254) {
+                            move(LINES-1, 0);
+                            clrtoeol();
+                            printw("[ERROR] bpm must be between 1-254!");
+                            refresh();
+                            sleep(1);
+                        }
+                    }
+                    metronome_practice_set_from_bpm(&p, bpm_step);
+                }
+                { // To bpm
+                    char bpm_step_str[4];
+                    uint16_t bpm_step = 0;
+
+                    while(bpm_step<1 || bpm_step<=p.bpm_from || bpm_step>255) {
+                        move(LINES-1, 0);
+                        clrtoeol();
+                        printw(":to bpm = ");
+                        refresh();
+
+                        wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
+                        bpm_step = atoi(bpm_step_str);
+
+                        if(bpm_step<1 || bpm_step <= p.bpm_from || bpm_step>255) {
+                            move(LINES-1, 0);
+                            clrtoeol();
+                            printw("[ERROR] bpm target must be greater than from (%d) and between 1-255!", p.bpm_from);
+                            refresh();
+                            sleep(1);
+                        }
+                    }
+                    p.bpm_to = bpm_step;
+                }
+                { // bpm step size
+                    char bpm_step_str[4];
+                    uint8_t bpm_step = 0;
+
+                    while(bpm_step<1 || bpm_step>10) {
+                        move(LINES-1, 0);
+                        clrtoeol();
+                        printw(":bpm step = ");
+                        refresh();
+                    
+                        wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
+                        bpm_step = atoi(bpm_step_str);
+
+                        if(bpm_step<1 || bpm_step>10) {
+                            move(LINES-1, 0);
+                            clrtoeol();
+                            printw("[ERROR] bpm step must be between 1-10!");
+                            refresh();
+                            sleep(1);
+                        }
+                    }
+                    p.bpm_step = bpm_step;
                 }
                 {
-                    move(LINES-1, 0);
-                    clrtoeol();
-                    printw(":to bpm = ");
-                    refresh();
-                    char bpm_step_str[3];
-                    wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
-                    p.bpm_to = (float)atoi(bpm_step_str);
-                }
-                {
-                    move(LINES-1, 0);
-                    clrtoeol();
-                    printw(":bpm step = ");
-                    refresh();
-                    char bpm_step_str[3];
-                    wgetnstr(stdscr, bpm_step_str, sizeof(bpm_step_str)-1);
-                    p.bpm_step = (float)atoi(bpm_step_str);
-                }
-                {
-                    move(LINES-1, 0);
-                    clrtoeol();
-                    printw(":interval = ");
-                    refresh();
-                    char interval[3];
-                    wgetnstr(stdscr, interval, sizeof(interval)-1);
-                    p.interval = atoi(interval);
+                    char interval_str[4];
+                    uint8_t interval = 0;
+
+                    while(interval<1 || interval>100) {
+                        move(LINES-1, 0);
+                        clrtoeol();
+                        printw(":interval = ");
+                        refresh();
+
+                        wgetnstr(stdscr, interval_str, sizeof(interval_str)-1);
+                        interval = atoi(interval_str);
+
+                        if(interval<1 || interval>100) {
+                            move(LINES-1, 0);
+                            clrtoeol();
+                            printw("[ERROR] interval must be between 1-100!");
+                            refresh();
+                            sleep(1);
+                        }
+                    }
+                    p.interval = interval;
                 }
                 m->reset = 0x1;
                 m->tick = 1;

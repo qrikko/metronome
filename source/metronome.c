@@ -255,3 +255,9 @@ void metronome_remove_measure(struct Metronome *m) {
         : m->track.active_measure
     ;
 }
+
+void metronome_practice_set_from_bpm(struct Practice *p, uint8_t bpm) {
+    p->bpm_from = (bpm>0 && bpm<255) ? bpm : 1;
+}
+
+

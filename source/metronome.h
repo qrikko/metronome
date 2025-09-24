@@ -66,3 +66,5 @@ extern void metronome_insert_measure_after(struct Metronome *m);
 extern void metronome_insert_measure_at_end(struct Metronome *m);
 
 extern void metronome_remove_measure(struct Metronome *m);
+
+extern void metronome_practice_set_from_bpm(struct Practice *, uint8_t bpm);
