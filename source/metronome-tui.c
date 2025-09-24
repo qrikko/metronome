@@ -10,12 +10,13 @@
 
 struct Coord { int x, y; };
 
-typedef enum {NORMAL_MODE, COMMAND_MODE, PAUSE_MODE} ProgramMode;
+typedef enum {NORMAL_MODE, PRACTICE_MODE, COMMAND_MODE, PAUSE_MODE} ProgramMode;
 const char* mode_string(const ProgramMode mode) {
     switch(mode) {
         case NORMAL_MODE:   return "-- NORMAL --";
         case PAUSE_MODE:    return "-- PAUSE --";
         case COMMAND_MODE:  return "-- COMMAND --";
+        case PRACTICE_MODE: return "-- PRACTICE --";
         default:            return "-- UNKNOWN --";
     }
 }
@@ -58,7 +59,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramMode mode, c
 
         wmove(win, 4, left);
         int selected_measure = (m->track.active_measure == i);
-        if(selected_measure && (state<BPM_SELECTED || mode==NORMAL_MODE)) { wattron(win, COLOR_PAIR(2)); }
+        if(selected_measure && (state<BPM_SELECTED || mode<=PRACTICE_MODE)) { wattron(win, COLOR_PAIR(2)); }
         wprintw(win, "[");
 
         if(selected_measure && selection == BEAT_SELECTED) { wattron(win, A_UNDERLINE); }
@@ -73,7 +74,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramMode mode, c
 
         wprintw(win, "]");
 
-        if (selected_measure && (state<BPM_SELECTED || mode==NORMAL_MODE)) { wattroff(win, COLOR_PAIR(2)); }
+        if (selected_measure && (state<BPM_SELECTED || mode<=PRACTICE_MODE)) { wattroff(win, COLOR_PAIR(2)); }
         left+=offset;
     }
     box(win, 0, 0);
@@ -149,7 +150,9 @@ void update_display(struct Metronome *m, WINDOW *win, const ProgramMode mode) {
         }
     }
 
-    mvwprintw(stdscr, LINES -2, 0, mode_string(mode));//"-- NORMAL --");
+    wmove(stdscr, LINES-2, 0);
+    wclrtoeol(stdscr);
+    wprintw(stdscr, mode_string(mode));//"-- NORMAL --");
     refresh();
     wrefresh(win);
 }
@@ -404,7 +407,7 @@ int main(int argc, char **argv) {
 
         uint8_t keep_running = 0x1;
         while (keep_running == 0x1) {
-            if(program_mode == NORMAL_MODE || program_mode == PAUSE_MODE) {
+            if(program_mode == NORMAL_MODE || program_mode == PRACTICE_MODE || program_mode == PAUSE_MODE) {
                 char cmd = wgetch(win);
 
                 switch(cmd) {
@@ -548,17 +551,19 @@ int main(int argc, char **argv) {
                         break;
                     }
                     case ' ': {
-                        if(program_mode == NORMAL_MODE) {
+                        if(program_mode==NORMAL_MODE || program_mode==PRACTICE_MODE) {
                             program_mode = PAUSE_MODE;
                             input_selection = BEAT_SELECTED;
                             ma_device_stop(&metronome.device);
-                            tui_print(&metronome, win, program_mode, input_selection);
+                            update_display(&metronome, win, program_mode);
+                            //tui_print(&metronome, win, program_mode, input_selection);
                         } else if(program_mode == PAUSE_MODE) {
-                            program_mode = NORMAL_MODE;
+                            program_mode = metronome.practice_active ? PRACTICE_MODE : NORMAL_MODE;
                             metronome.reset = 1;
                             metronome.tick = 1;
                             metronome.track.active_measure = 0;
                             ma_device_start(&metronome.device);
+                            tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
                     }
@@ -569,16 +574,31 @@ int main(int argc, char **argv) {
                 if(handle_command_mode(&metronome) == 1) {
                     keep_running = 0x0;
                 }
-                program_mode = NORMAL_MODE;
+                program_mode = metronome.practice_active ? PRACTICE_MODE : NORMAL_MODE;
                 update_display(&metronome, win, program_mode);
                 ma_device_start(&metronome.device);
             }
 
+            if(program_mode==PRACTICE_MODE) {
+                if (metronome.bpm >= metronome.practice[metronome.practice_current].bpm_to) {
+                    metronome.practice_active = 0;
+                    program_mode = PAUSE_MODE;
+                    input_selection = BEAT_SELECTED;
+                    ma_device_stop(&metronome.device);
+                    update_display(&metronome, win, program_mode);
+                }
+            }
+
             if(metronome.tick > 0) {
+                if(metronome.practice_active && program_mode != PAUSE_MODE) {
+                    program_mode = PRACTICE_MODE;
+                }
+
                 update_display(&metronome, win, program_mode);
                 metronome.tick = 0;
             } 
             wrefresh(win);
+            refresh();
         }
     }
     endwin();
