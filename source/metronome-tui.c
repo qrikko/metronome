@@ -438,19 +438,32 @@ int main(int argc, char **argv) {
                     } 
                     case 'h': {
                         if(program_mode == PAUSE_MODE) {
-                            metronome.track.active_measure = metronome.track.active_measure > 0 
-                                ? metronome.track.active_measure-1 
-                                : metronome.track.measure_count;
+                            if(input_selection==BEAT_SELECTED) {
+                                input_selection=UNIT_SELECTED;
+                                metronome.track.active_measure = metronome.track.active_measure > 0 
+                                    ? metronome.track.active_measure-1 
+                                    : metronome.track.measure_count
+                                ;
+                            } else if(input_selection==UNIT_SELECTED) {
+                                input_selection=BEAT_SELECTED;
+                            }
                             tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
                     }
                     case 'l': {
                         if(program_mode == PAUSE_MODE) {
-                            metronome.track.active_measure = 
-                                metronome.track.active_measure < metronome.track.measure_count
-                                ? metronome.track.active_measure+1
-                                : 0;
+                            if(input_selection==BEAT_SELECTED) {
+                                input_selection=UNIT_SELECTED;
+                            } else if(input_selection==UNIT_SELECTED) {
+                                input_selection=BEAT_SELECTED;
+                                metronome.track.active_measure = 
+                                    metronome.track.active_measure < metronome.track.measure_count
+                                    ? metronome.track.active_measure+1
+                                    : 0
+                                ;
+                            }
+
                             tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
@@ -458,9 +471,11 @@ int main(int argc, char **argv) {
                     case 'n': {
                         if(program_mode == PAUSE_MODE) {
                             if(input_selection<BPM_SELECTED) {
-                                input_selection = input_selection==BEAT_SELECTED ? UNIT_SELECTED : BEAT_SELECTED;
-                            } else if(input_selection==BPM_SELECTED) {
-                                metronome.bpm += 5;
+                                metronome.track.active_measure = 
+                                    (metronome.track.active_measure < metronome.track.measure_count)
+                                    ? metronome.track.active_measure+1
+                                    : 0
+                                ;
                             }
                         }
                         tui_print(&metronome, win, program_mode, input_selection);
@@ -469,7 +484,11 @@ int main(int argc, char **argv) {
                     case 'p': {
                         if(program_mode == PAUSE_MODE) {
                             if(input_selection<BPM_SELECTED) {
-                                input_selection = input_selection==UNIT_SELECTED ? BEAT_SELECTED : UNIT_SELECTED;
+                                metronome.track.active_measure = 
+                                    (metronome.track.active_measure > 0)
+                                    ? metronome.track.active_measure-1
+                                    : metronome.track.measure_count
+                                ;
                             }
                             tui_print(&metronome, win, program_mode, input_selection);  
                         }
