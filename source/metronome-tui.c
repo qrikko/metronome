@@ -58,7 +58,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramMode mode, c
 
         wmove(win, 4, left);
         int selected_measure = (m->track.active_measure == i);
-        if (selected_measure && state<BPM_SELECTED) { wattron(win, COLOR_PAIR(2)); }
+        if(selected_measure && (state<BPM_SELECTED || mode==NORMAL_MODE)) { wattron(win, COLOR_PAIR(2)); }
         wprintw(win, "[");
 
         if(selected_measure && selection == BEAT_SELECTED) { wattron(win, A_UNDERLINE); }
@@ -73,7 +73,7 @@ void tui_print(const struct Metronome *m, WINDOW *win, const ProgramMode mode, c
 
         wprintw(win, "]");
 
-        if (selected_measure && state<BPM_SELECTED) { wattroff(win, COLOR_PAIR(2)); }
+        if (selected_measure && (state<BPM_SELECTED || mode==NORMAL_MODE)) { wattroff(win, COLOR_PAIR(2)); }
         left+=offset;
     }
     box(win, 0, 0);
