@@ -202,17 +202,56 @@ int metronome_setup(struct Metronome *m) {
 void metronome_shutdown(struct Metronome *m) {
     ma_device_uninit(&m->device);
 }
-void metronome_add_measure(struct Metronome *m) {
+
+void metronome_insert_measure_at_start(struct Metronome *m) {
+    assert(++m->track.measure_count < 10);
+    
+    for(int i=m->track.measure_count+1; i>0; --i) {
+        m->track.measures[i] = m->track.measures[i-1];
+    }
+
+    m->track.active_measure=0;
+    m->track.measures[0].beats = 4;
+    m->track.measures[0].unit = 4;
+}
+void metronome_insert_measure_before(struct Metronome *m) {
+    assert(++m->track.measure_count < 10);
+
+    for(int i=m->track.measure_count+1; i>m->track.active_measure; --i) {
+        m->track.measures[i] = m->track.measures[i-1];
+    }
+
+    m->track.measures[m->track.active_measure].beats = 4;
+    m->track.measures[m->track.active_measure].unit = 4;
+}
+void metronome_insert_measure_after(struct Metronome *m) {
+    assert(++m->track.measure_count < 10);
+
+    for(int i=m->track.measure_count+1; i>m->track.active_measure+1; --i) {
+        m->track.measures[i] = m->track.measures[i-1];
+    }
+
+    m->track.active_measure++;
+    m->track.measures[m->track.active_measure].beats = 4;
+    m->track.measures[m->track.active_measure].unit = 4;
+}
+void metronome_insert_measure_at_end(struct Metronome *m) {
     assert(++m->track.measure_count < 10);
     m->track.measures[m->track.measure_count].beats = 4;
     m->track.measures[m->track.measure_count].unit = 4;
-    m->track.active_measure++;
+    m->track.active_measure = m->track.measure_count;
 }
 
 void metronome_remove_measure(struct Metronome *m) {
-    assert(m->track.measure_count > 0);
+    if (m->track.measure_count < 1) { return; }
+
     for(int i=m->track.active_measure; i<=m->track.measure_count; ++i) {
         m->track.measures[i] = m->track.measures[i+1];
     }
     m->track.measure_count--;
+    m->track.active_measure =
+        (m->track.active_measure > m->track.measure_count)
+        ? m->track.measure_count
+        : m->track.active_measure
+    ;
 }

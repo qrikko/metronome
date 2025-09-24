@@ -60,5 +60,9 @@ extern void metronome_inc_unit(struct Metronome *m);
 extern void metronome_dec_beats(struct Metronome *m);
 extern void metronome_inc_beats(struct Metronome *m);
 
-extern void metronome_add_measure(struct Metronome *m);
+extern void metronome_insert_measure_at_start(struct Metronome *m);
+extern void metronome_insert_measure_before(struct Metronome *m);
+extern void metronome_insert_measure_after(struct Metronome *m);
+extern void metronome_insert_measure_at_end(struct Metronome *m);
+
 extern void metronome_remove_measure(struct Metronome *m);
