@@ -412,7 +412,9 @@ int main(int argc, char **argv) {
 
                 switch(cmd) {
                     case 'j': {
-                        if(program_mode == PAUSE_MODE) {
+                        if(program_mode == NORMAL_MODE) {
+                            metronome.bpm--;
+                        } else if(program_mode == PAUSE_MODE) {
                             if(input_selection == BEAT_SELECTED) {
                             metronome_dec_beats(&metronome);
                             } else if(input_selection == UNIT_SELECTED) {
@@ -426,7 +428,9 @@ int main(int argc, char **argv) {
                         break;
                     } 
                     case 'k': {
-                        if(program_mode == PAUSE_MODE) {
+                        if(program_mode == NORMAL_MODE) {
+                            metronome.bpm++;
+                        } else if(program_mode == PAUSE_MODE) {
                             if(input_selection == BEAT_SELECTED) {
                                 metronome_inc_beats(&metronome);
                             } else if(input_selection == UNIT_SELECTED) {
@@ -553,7 +557,7 @@ int main(int argc, char **argv) {
                     case ' ': {
                         if(program_mode==NORMAL_MODE || program_mode==PRACTICE_MODE) {
                             program_mode = PAUSE_MODE;
-                            input_selection = BEAT_SELECTED;
+                            input_selection = BPM_SELECTED;// BEAT_SELECTED;
                             ma_device_stop(&metronome.device);
                             update_display(&metronome, win, program_mode);
                             //tui_print(&metronome, win, program_mode, input_selection);
