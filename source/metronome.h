@@ -38,11 +38,6 @@ struct Metronome {
     struct Practice practice[MAX_PRACTICE_SETS];
     struct Track track; 
 
-    // @todo: replace with using "Practice structs"
-    //uint8_t interval;
-    //uint8_t next_step;
-    // @end
-
     uint8_t base_bpm;
 
     uint8_t tick;

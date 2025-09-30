@@ -4,6 +4,8 @@
 #define MA_IMPLEMENTATION
 #include <miniaudio.h>
 
+#include <cJSON.h>
+
 #include <math.h>
 #include <stdio.h>
 
@@ -136,7 +138,21 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         }
     }
 }
-
+void metronome_save(const struct Metronome *m, const char *path) {
+    if(path==NULL) {
+        path = "save.file";
+    }
+    FILE *f = fopen(path, "w");
+    cJSON *j = cJSON_CreateObject();
+    { // base settings
+        cJSON_AddNumberToObject(j, "bpm", m->bpm);
+        cJSON_AddNumberToObject(j, "beats", m->beats);
+        cJSON_AddNumberToObject(j, "unit", m->unit);
+    }
+    
+    cJSON_Print(j);
+    cJSON_Delete(j);
+}
 void metronome_load(struct Metronome *m) {
     m->bpm = 80;
     m->track.measures[m->track.active_measure].beats = 4;
@@ -166,13 +182,16 @@ void metronome_load(struct Metronome *m) {
         m->track.measures[0].unit     = 4;
     }
 }
-
 int metronome_setup(struct Metronome *m) {
     m->tick = 1;
     m->track.active_measure = 0;
     m->track.measure_count = 0;
 
-    metronome_load(m);
+    m->bpm = 42;
+    m->beats = 7;
+    m->unit = 8;
+    metronome_save(m, NULL);
+    //metronome_load(m);
 
     ma_result result;
     ma_device_config device_config;
@@ -198,11 +217,9 @@ int metronome_setup(struct Metronome *m) {
     }
     return 0;
 }
-
 void metronome_shutdown(struct Metronome *m) {
     ma_device_uninit(&m->device);
 }
-
 void metronome_insert_measure_at_start(struct Metronome *m) {
     assert(++m->track.measure_count < 10);
     
@@ -241,7 +258,6 @@ void metronome_insert_measure_at_end(struct Metronome *m) {
     m->track.measures[m->track.measure_count].unit = 4;
     m->track.active_measure = m->track.measure_count;
 }
-
 void metronome_remove_measure(struct Metronome *m) {
     if (m->track.measure_count < 1) { return; }
 
@@ -255,7 +271,6 @@ void metronome_remove_measure(struct Metronome *m) {
         : m->track.active_measure
     ;
 }
-
 void metronome_practice_set_from_bpm(struct Practice *p, uint8_t bpm) {
     p->bpm_from = (bpm>0 && bpm<255) ? bpm : 1;
 }
