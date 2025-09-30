@@ -31,10 +31,6 @@
 #define MIN_NOMINATOR (2)
 #define MAX_NOMINATOR (32)
 
-//static struct Metronome _metronome;
-
-//struct Metronome *metronome_state() { return &_metronome; }
-
 unsigned int power_of_two(unsigned int value) {
     if(value == 0) return 1;
     if(value == 1) return 1;
@@ -274,5 +270,3 @@ void metronome_remove_measure(struct Metronome *m) {
 void metronome_practice_set_from_bpm(struct Practice *p, uint8_t bpm) {
     p->bpm_from = (bpm>0 && bpm<255) ? bpm : 1;
 }
-
-
