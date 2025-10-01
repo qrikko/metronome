@@ -133,6 +133,12 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
     }
 }
 
+void metronome_save(const struct Metronome *m, const char *file) {
+    if(file == NULL) {
+        // save default file!
+    }
+    
+}
 void metronome_load(struct Metronome *m) {
     m->bpm = 80;
     m->track.measures[m->track.active_measure].beats = 4;
@@ -162,7 +168,6 @@ void metronome_load(struct Metronome *m) {
         m->track.measures[0].unit     = 4;
     }
 }
-
 int metronome_setup(struct Metronome *m) {
     m->tick = 1;
     m->track.active_measure = 0;
@@ -194,11 +199,9 @@ int metronome_setup(struct Metronome *m) {
     }
     return 0;
 }
-
 void metronome_shutdown(struct Metronome *m) {
     ma_device_uninit(&m->device);
 }
-
 void metronome_insert_measure_at_start(struct Metronome *m) {
     assert(++m->track.measure_count < 10);
     
