@@ -4,6 +4,8 @@
 #define MA_IMPLEMENTATION
 #include <miniaudio.h>
 
+#include <cJSON.h>
+
 #include <math.h>
 #include <stdio.h>
 
@@ -132,12 +134,20 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         }
     }
 }
-
-void metronome_save(const struct Metronome *m, const char *file) {
-    if(file == NULL) {
-        // save default file!
+void metronome_save(const struct Metronome *m, const char *path) {
+    if(path==NULL) {
+        path = "save.file";
+    }
+    FILE *f = fopen(path, "w");
+    cJSON *j = cJSON_CreateObject();
+    { // base settings
+        cJSON_AddNumberToObject(j, "bpm", m->bpm);
+        cJSON_AddNumberToObject(j, "beats", m->track.measures[0].beats);
+        cJSON_AddNumberToObject(j, "unit", m->track.measures[0].unit);
     }
     
+    cJSON_Print(j);
+    cJSON_Delete(j);
 }
 void metronome_load(struct Metronome *m) {
     m->bpm = 80;
@@ -173,7 +183,11 @@ int metronome_setup(struct Metronome *m) {
     m->track.active_measure = 0;
     m->track.measure_count = 0;
 
-    metronome_load(m);
+    m->bpm = 42;
+    m->track.measures[0].beats = 7;
+    m->track.measures[0].unit = 8;
+    //metronome_save(m, NULL);
+    //metronome_load(m);
 
     ma_result result;
     ma_device_config device_config;

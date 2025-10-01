@@ -1,3 +1,6 @@
 [submodule "3rd-party/miniaudio"]
 	path = 3rd-party/miniaudio
 	url = git@github.com:qrikko/miniaudio.git
+[submodule "3rd-party/cjson"]
+	path = 3rd-party/cjson
+	url = git@github.com:qrikko/cJSON.git
