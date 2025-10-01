@@ -355,16 +355,7 @@ int handle_command_mode(struct Metronome *m) {
             m->reset = 0x1;
             m->tick = 1;
         } else if(strcmp(token, "w") == 0) {
-            const char *home = getenv("HOME");
-            const char *rel = "/.local/share/metronome.state";
-            char path[128];
-            sprintf(path, "%s/%s", home, rel);
-
-            FILE *f = fopen(path, "wb");
-            if (f) {
-                fwrite(m, sizeof(uint8_t), 6, f);
-                fclose(f);
-            }
+            metronome_save(m, NULL);
         }
 
         else if(strcmp(token, "quit") == 0 || strcmp(token, "q") == 0) {

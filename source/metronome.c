@@ -1,5 +1,6 @@
 #include "metronome.h"
 #include <stdint.h>
+#include <stdlib.h>
 
 #define MA_IMPLEMENTATION
 #include <miniaudio.h>
@@ -135,19 +136,55 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
     }
 }
 void metronome_save(const struct Metronome *m, const char *path) {
+    char path_buffer[128];
     if(path==NULL) {
-        path = "save.file";
+        sprintf(path_buffer, "%s/.local/share/metronome.save", getenv("HOME"));
+    } else {
+        strcpy(path_buffer, path);
     }
-    FILE *f = fopen(path, "w");
-    cJSON *j = cJSON_CreateObject();
+
+    FILE *f = fopen(path_buffer, "w");
+    cJSON *j_metronome = cJSON_CreateObject();
+    cJSON *j_track = cJSON_AddObjectToObject(j_metronome, "track");
     { // base settings
-        cJSON_AddNumberToObject(j, "bpm", m->bpm);
-        cJSON_AddNumberToObject(j, "beats", m->track.measures[0].beats);
-        cJSON_AddNumberToObject(j, "unit", m->track.measures[0].unit);
+        cJSON_AddNumberToObject(j_metronome, "bpm", m->bpm);
+        cJSON_AddItemToObject(j_metronome, "track", j_track);
+    }
+    { // Track settings
+        cJSON *j_measure_obj = cJSON_AddObjectToObject(j_track, "measures");
+        cJSON_AddNumberToObject(j_measure_obj, "measure_count", m->track.measure_count);
+
+        cJSON *j_measures = cJSON_AddArrayToObject(j_measure_obj, "data");
+        for(size_t i=0; i<=m->track.measure_count; ++i) {
+            cJSON* j_measure = cJSON_CreateObject();
+            cJSON_AddNumberToObject(j_measure, "beats", m->track.measures[i].beats);
+            cJSON_AddNumberToObject(j_measure, "unit", m->track.measures[i].unit);
+
+            cJSON_AddItemToArray(j_measures, j_measure);
+        }
+    }
+    { // Practice settings
+        cJSON *j_practice_array = cJSON_AddObjectToObject(j_metronome, "practice");
+        cJSON_AddNumberToObject(j_practice_array, "count", m->practice_count);
+        cJSON_AddArrayToObject(j_practice_array, "data");
+
+        for(size_t i=0; i<m->practice_count; ++i) {
+            cJSON* j_practice = cJSON_CreateObject();
+            cJSON_AddNumberToObject(j_practice, "bpm_from", m->practice[i].bpm_from);
+            cJSON_AddNumberToObject(j_practice, "bpm_to", m->practice[i].bpm_to);
+            cJSON_AddNumberToObject(j_practice, "bpm_step", m->practice[i].bpm_step);
+            cJSON_AddNumberToObject(j_practice, "interval", m->practice[i].interval);
+
+            cJSON_AddItemToArray(j_practice_array, j_practice);
+        }
     }
     
-    cJSON_Print(j);
-    cJSON_Delete(j);
+    char *jsonstr = cJSON_Print(j_metronome);
+    fprintf(f, "%s", jsonstr);
+
+    fclose(f);
+    cJSON_Delete(j_metronome);
+    free(jsonstr);
 }
 void metronome_load(struct Metronome *m) {
     m->bpm = 80;
