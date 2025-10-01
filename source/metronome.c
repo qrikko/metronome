@@ -142,8 +142,8 @@ void metronome_save(const struct Metronome *m, const char *path) {
     cJSON *j = cJSON_CreateObject();
     { // base settings
         cJSON_AddNumberToObject(j, "bpm", m->bpm);
-        cJSON_AddNumberToObject(j, "beats", m->beats);
-        cJSON_AddNumberToObject(j, "unit", m->unit);
+        cJSON_AddNumberToObject(j, "beats", m->track.measures[0].beats);
+        cJSON_AddNumberToObject(j, "unit", m->track.measures[0].unit);
     }
     
     cJSON_Print(j);
@@ -184,9 +184,9 @@ int metronome_setup(struct Metronome *m) {
     m->track.measure_count = 0;
 
     m->bpm = 42;
-    m->beats = 7;
-    m->unit = 8;
-    metronome_save(m, NULL);
+    m->track.measures[0].beats = 7;
+    m->track.measures[0].unit = 8;
+    //metronome_save(m, NULL);
     //metronome_load(m);
 
     ma_result result;

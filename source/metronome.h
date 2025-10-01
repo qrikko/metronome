@@ -27,8 +27,8 @@ struct Practice {
 
 struct Metronome {
     uint8_t bpm;
-    uint8_t beats;
-    uint8_t unit;
+//    uint8_t beats;
+    //uint8_t unit;
     uint8_t bpm_step; // what does it do? and do I need it for both practice and metronome?
 
     uint8_t practice_count;
