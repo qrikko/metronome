@@ -144,13 +144,16 @@ void metronome_save(const struct Metronome *m, const char *path) {
     }
 
     FILE *f = fopen(path_buffer, "w");
-    cJSON *j_metronome = cJSON_CreateObject();
-    cJSON *j_track = cJSON_AddObjectToObject(j_metronome, "track");
+    cJSON *json = cJSON_CreateObject();
+    cJSON *j_metronome = cJSON_AddObjectToObject(json, "metronome");
     { // base settings
+        cJSON_AddNumberToObject(j_metronome, "base_bpm", m->base_bpm);
         cJSON_AddNumberToObject(j_metronome, "bpm", m->bpm);
-        cJSON_AddItemToObject(j_metronome, "track", j_track);
     }
     { // Track settings
+        cJSON *j_track = cJSON_AddObjectToObject(j_metronome, "track");
+        cJSON_AddItemToObject(j_metronome, "track", j_track);
+
         cJSON *j_measure_obj = cJSON_AddObjectToObject(j_track, "measures");
         cJSON_AddNumberToObject(j_measure_obj, "measure_count", m->track.measure_count);
 
@@ -164,9 +167,9 @@ void metronome_save(const struct Metronome *m, const char *path) {
         }
     }
     { // Practice settings
-        cJSON *j_practice_array = cJSON_AddObjectToObject(j_metronome, "practice");
-        cJSON_AddNumberToObject(j_practice_array, "count", m->practice_count);
-        cJSON_AddArrayToObject(j_practice_array, "data");
+        cJSON *j_practice_obj = cJSON_AddObjectToObject(j_metronome, "practice");
+        cJSON_AddNumberToObject(j_practice_obj, "count", m->practice_count);
+        cJSON* j_practice_array = cJSON_AddArrayToObject(j_practice_obj, "data");
 
         for(size_t i=0; i<m->practice_count; ++i) {
             cJSON* j_practice = cJSON_CreateObject();
@@ -179,36 +182,106 @@ void metronome_save(const struct Metronome *m, const char *path) {
         }
     }
     
-    char *jsonstr = cJSON_Print(j_metronome);
+    char *jsonstr = cJSON_Print(json);
     fprintf(f, "%s", jsonstr);
 
     fclose(f);
-    cJSON_Delete(j_metronome);
+    cJSON_Delete(json);
     free(jsonstr);
 }
 void metronome_load(struct Metronome *m) {
-    m->bpm = 80;
-    m->track.measures[m->track.active_measure].beats = 4;
-    m->track.measures[m->track.active_measure].unit = 4;
-    return;
-
-    //@todo: loading not active for now, since I broke it
-    uint8_t data[6];
     const char *home = getenv("HOME");
-    const char *rel = "/.local/share/metronome.state";
+    const char *rel = "/.local/share/metronome.save";
     char path[128];
     sprintf(path, "%s/%s", home, rel);
-    FILE *f = fopen(path, "rb");
+    FILE *f = fopen(path, "r");
     if (f) {
-        fread(data, sizeof(uint8_t), 6, f);
+        fseek(f, 0, SEEK_END);
+        long filesize = ftell(f);
+        fseek(f, 0, SEEK_SET);
 
-        m->bpm          = data[0]; 
-        m->track.measures[m->track.active_measure].beats = data[1];
-        m->track.measures[m->track.active_measure].unit = data[2];
-
-        m->bpm_step     = data[3];
+        char *buffer = (char *)malloc(filesize + 1);
+        fread(buffer, 1, filesize, f);
+        buffer[filesize] = '\0';
 
         fclose(f);
+
+        cJSON *json = cJSON_Parse(buffer);
+        if(json == NULL) {
+            const char *error_ptr = cJSON_GetErrorPtr();
+            if(error_ptr != NULL) {
+                fprintf(stderr, "Error before: %s\n", error_ptr);
+            }
+            cJSON_Delete(json);
+            free(buffer);
+            return;
+        }
+
+        { // read savefile
+            cJSON *jm = cJSON_GetObjectItemCaseSensitive(json, "metronome");
+
+            cJSON* bpm = cJSON_GetObjectItemCaseSensitive(jm, "bpm");
+            if(cJSON_IsNumber(bpm)) { m->bpm = bpm->valueint; }
+            cJSON* base_bpm = cJSON_GetObjectItemCaseSensitive(jm, "base_bpm");
+            if(cJSON_IsNumber(base_bpm)) { m->base_bpm = base_bpm->valueint; }
+
+            { // track data
+                cJSON *track = cJSON_GetObjectItemCaseSensitive(jm, "track");
+                if(cJSON_IsObject(track)) {
+                    cJSON *measures = cJSON_GetObjectItemCaseSensitive(track, "measures");
+                    if(cJSON_IsObject(measures)) {
+                        cJSON* measure_count = cJSON_GetObjectItemCaseSensitive(measures, "measure_count");
+                        if(cJSON_IsNumber(measure_count)) {
+                            m->track.measure_count = measure_count->valueint;
+                        }
+                    }
+                    cJSON* measure_data = cJSON_GetObjectItemCaseSensitive(measures, "data");
+                    if(cJSON_IsArray(measure_data)) {
+                        for(size_t i=0; i<=m->track.measure_count; ++i) {
+                            cJSON* measure = cJSON_GetArrayItem(measure_data, i);
+                            if(cJSON_IsObject(measure)) {
+                                cJSON* beats = cJSON_GetObjectItemCaseSensitive(measure, "beats");
+                                if(cJSON_IsNumber(beats)) { m->track.measures[i].beats = beats->valueint; }
+
+                                cJSON* unit = cJSON_GetObjectItemCaseSensitive(measure, "unit");
+                                if(cJSON_IsNumber(unit)) { m->track.measures[i].unit = unit->valueint; }
+                            }
+                        }
+                    }
+                }
+            }
+            { // practice data
+                cJSON* practices = cJSON_GetObjectItemCaseSensitive(jm, "practice");
+                if(cJSON_IsObject(practices)) {
+                    cJSON* practice_count = cJSON_GetObjectItemCaseSensitive(practices, "count");
+                    if(cJSON_IsNumber(practice_count)) { m->practice_count = practice_count->valueint; }
+                    if(m->practice_count > 0) { m->practice_active = 1; }
+
+                    cJSON* practice_data = cJSON_GetObjectItemCaseSensitive(practices, "data");
+                    for(size_t i=0; i<m->practice_count; ++i) {
+                        m->practice[i].iteration = 0;
+
+                        cJSON* practice = cJSON_GetArrayItem(practice_data, i);
+                        if(cJSON_IsObject(practice)) {
+                            cJSON* bpm_from = cJSON_GetObjectItemCaseSensitive(practice, "bpm_from");
+                            if(cJSON_IsNumber(bpm_from)) { m->practice[i].bpm_from = bpm_from->valueint; }
+
+                            cJSON* bpm_to = cJSON_GetObjectItemCaseSensitive(practice, "bpm_to");
+                            if(cJSON_IsNumber(bpm_to)) { m->practice[i].bpm_to = bpm_to->valueint; }
+
+                            cJSON* bpm_step = cJSON_GetObjectItemCaseSensitive(practice, "bpm_step");
+                            if(cJSON_IsNumber(bpm_step)) { m->practice[i].bpm_step = bpm_step->valueint; }
+
+                            cJSON* interval = cJSON_GetObjectItemCaseSensitive(practice, "interval");
+                            if(cJSON_IsNumber(interval)) { m->practice[i].interval = interval->valueint; }
+                        }
+                    }
+                }
+            }
+        }
+
+        cJSON_Delete(json);
+        free(buffer);
     } else {
         m->bpm      = 80.0;
         m->track.measures[0].beats    = 4;
@@ -223,8 +296,10 @@ int metronome_setup(struct Metronome *m) {
     m->bpm = 42;
     m->track.measures[0].beats = 7;
     m->track.measures[0].unit = 8;
-    //metronome_save(m, NULL);
-    //metronome_load(m);
+
+    m->practice_count = 0;
+    
+    metronome_load(m);
 
     ma_result result;
     ma_device_config device_config;

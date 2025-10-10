@@ -30,7 +30,6 @@ int main (int argc, char **argv) {
 
     metronome.bpm=120; 
     metronome.base_bpm=120.0; 
-    metronome.bpm_step=0;
 
     if(argc > 1) {
         metronome.bpm = atoi(argv[1]);
