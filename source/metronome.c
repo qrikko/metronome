@@ -80,12 +80,14 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
     (void)input;
     (void)device;
     struct Metronome *m = device->pUserData;
+    if(m->state==METRONOME_STOPPED) { return; }
 
     static double phase = 0.0;
     static unsigned int beat_sample_counter = 0;
     static unsigned int beat_counter = 0;
     static const unsigned int click_samples = (unsigned int)(0.02 * SAMPLE_RATE); // 20ms click
 
+    // @todo: remove this and instead set these values in metronome_stop()
     if (m->reset == 0x1) {
         phase = 0.0;
         beat_sample_counter = 0;
@@ -93,7 +95,19 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         m->reset = 0x0;
     }
 
-    const double beat_duration = (60.0/m->bpm) * (4.0/m->track.measures[m->track.active_measure].unit);
+    uint8_t beats = 0;
+    uint8_t unit  = 0;
+    if(m->state==METRONOME_STARTED) {
+        unit  = m->count_in.unit;
+        beats = m->count_in.beats;
+        if(unit==0 || beats==0) { m->state = METRONOME_RUNNING; }
+    }
+    if(m->state==METRONOME_RUNNING) {
+        unit    = m->track.measures[m->track.active_measure].unit;
+        beats   = m->track.measures[m->track.active_measure].beats;
+    }
+
+    const double beat_duration = (60.0/m->bpm) * (4.0/unit);
     const unsigned int beat_samples = (unsigned int)(beat_duration * SAMPLE_RATE);
                                                                                   
     for(ma_uint32 i=0; i<frame_count; ++i) {
@@ -101,7 +115,7 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
             float amplitude = sin(phase) * .5f;
             *out++ = amplitude;
             *out++ = amplitude; // for sterio output
-            phase += 2.0 * M_PI * (beat_counter==0 ? CLICK_ONE_FREQUENCY : CLICK_FREQUENCY) / SAMPLE_RATE;
+            phase += 2.0 * M_PI * (m->state==METRONOME_STARTED || beat_counter==0 ? CLICK_ONE_FREQUENCY : CLICK_FREQUENCY) / SAMPLE_RATE;
         } else {
             *out++ = 0.f;
             *out++ = 0.f;
@@ -110,26 +124,32 @@ void data_callback(ma_device* device, void* output, const void* input, ma_uint32
         beat_sample_counter++;
 
         if(beat_sample_counter >= beat_samples) {
-            beat_sample_counter = 0;
-            phase = 0.0;
-            beat_counter = (beat_counter +1) % m->track.measures[m->track.active_measure].beats;
-
-            if(beat_counter == 0) {
-                m->track.active_measure = m->track.active_measure < m->track.measure_count ? m->track.active_measure+1 : 0;
-            }
-            
-            m->tick = beat_counter+1;
-
-            // @todo: need to only increase iteration IF all the tracks mesures were completed
-            if (beat_counter == 0 && m->practice_active) {
-                struct Practice *p = &m->practice[m->practice_current];
-                if (m->track.active_measure == 0) {
-                    p->iteration++;
+            if(m->state==METRONOME_STARTED) {
+                beat_counter++;
+                if(beat_counter > m->count_in.beats) {
+                    m->state = METRONOME_RUNNING;
                 }
+            } else {
+                beat_sample_counter = 0;
+                phase = 0.0;
+                beat_counter = (beat_counter +1) % beats;
 
-                if(p->iteration > p->interval-1) {
-                    m->bpm += p->bpm_step;
-                    p->iteration = 0;
+                if(beat_counter == 0) {
+                    m->track.active_measure = m->track.active_measure < m->track.measure_count ? m->track.active_measure+1 : 0;
+                }
+                
+                m->tick = beat_counter+1;
+
+                if (beat_counter == 0 && m->practice_active) {
+                    struct Practice *p = &m->practice[m->practice_current];
+                    if (m->track.active_measure == 0) {
+                        p->iteration++;
+                    }
+
+                    if(p->iteration > p->interval-1) {
+                        m->bpm += p->bpm_step;
+                        p->iteration = 0;
+                    }
                 }
             }
         }
@@ -149,6 +169,11 @@ void metronome_save(const struct Metronome *m, const char *path) {
     { // base settings
         cJSON_AddNumberToObject(j_metronome, "base_bpm", m->base_bpm);
         cJSON_AddNumberToObject(j_metronome, "bpm", m->bpm);
+
+        cJSON *count_in = cJSON_CreateObject();
+        cJSON_AddNumberToObject(count_in, "beats", m->count_in.beats);
+        cJSON_AddNumberToObject(count_in, "unit", m->count_in.unit);
+        cJSON_AddObjectToObject(j_metronome, "count_in");
     }
     { // Track settings
         cJSON *j_track = cJSON_AddObjectToObject(j_metronome, "track");
@@ -221,9 +246,16 @@ void metronome_load(struct Metronome *m) {
             cJSON *jm = cJSON_GetObjectItemCaseSensitive(json, "metronome");
 
             cJSON* bpm = cJSON_GetObjectItemCaseSensitive(jm, "bpm");
-            if(cJSON_IsNumber(bpm)) { m->bpm = bpm->valueint; }
+            m->bpm = cJSON_IsNumber(bpm) ? bpm->valueint : 80;
+
             cJSON* base_bpm = cJSON_GetObjectItemCaseSensitive(jm, "base_bpm");
-            if(cJSON_IsNumber(base_bpm)) { m->base_bpm = base_bpm->valueint; }
+            m->base_bpm = cJSON_IsNumber(base_bpm) ? base_bpm->valueint : 80;
+
+            cJSON* count_in = cJSON_GetObjectItemCaseSensitive(jm, "count_in");
+            cJSON *count_in_beats = cJSON_GetObjectItemCaseSensitive(count_in, "beats");
+            cJSON *count_in_unit  = cJSON_GetObjectItemCaseSensitive(count_in, "unit");
+            m->count_in.beats = cJSON_IsNumber(count_in_beats) ? count_in_beats->valueint : 0;
+            m->count_in.unit  = cJSON_IsNumber(count_in_unit)  ? count_in_unit->valueint  : 0;
 
             { // track data
                 cJSON *track = cJSON_GetObjectItemCaseSensitive(jm, "track");
@@ -300,6 +332,7 @@ int metronome_setup(struct Metronome *m) {
     m->practice_count = 0;
     
     metronome_load(m);
+    m->state = METRONOME_STOPPED;
 
     ma_result result;
     ma_device_config device_config;
@@ -381,4 +414,12 @@ void metronome_remove_measure(struct Metronome *m) {
 }
 void metronome_practice_set_from_bpm(struct Practice *p, uint8_t bpm) {
     p->bpm_from = (bpm>0 && bpm<255) ? bpm : 1;
+}
+void metronome_start(struct Metronome *m) {
+    ma_device_start(&m->device);
+    m->state = METRONOME_STARTED;
+}
+void metronome_stop(struct Metronome *m) {
+    ma_device_stop(&m->device);
+    m->state = METRONOME_STOPPED;
 }

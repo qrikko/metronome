@@ -152,7 +152,7 @@ void update_display(struct Metronome *m, WINDOW *win, const ProgramMode mode) {
 
     wmove(stdscr, LINES-2, 0);
     wclrtoeol(stdscr);
-    wprintw(stdscr, mode_string(mode));//"-- NORMAL --");
+    wprintw(stdscr, "%s", mode_string(mode));//"-- NORMAL --");
     refresh();
     wrefresh(win);
 }
@@ -162,7 +162,7 @@ int handle_command_mode(struct Metronome *m) {
     int ch;
     int result = 0;
 
-    ma_device_stop(&m->device);
+    metronome_stop(m);
     echo();
     curs_set(1);
     timeout(20000);
@@ -549,7 +549,7 @@ int main(int argc, char **argv) {
                         if(program_mode==NORMAL_MODE || program_mode==PRACTICE_MODE) {
                             program_mode = PAUSE_MODE;
                             input_selection = BPM_SELECTED;// BEAT_SELECTED;
-                            ma_device_stop(&metronome.device);
+                            metronome_stop(&metronome);
                             update_display(&metronome, win, program_mode);
                             //tui_print(&metronome, win, program_mode, input_selection);
                         } else if(program_mode == PAUSE_MODE) {
@@ -557,7 +557,7 @@ int main(int argc, char **argv) {
                             metronome.reset = 1;
                             metronome.tick = 1;
                             metronome.track.active_measure = 0;
-                            ma_device_start(&metronome.device);
+                            metronome_start(&metronome);
                             tui_print(&metronome, win, program_mode, input_selection);
                         }
                         break;
@@ -571,7 +571,7 @@ int main(int argc, char **argv) {
                 }
                 program_mode = metronome.practice_active ? PRACTICE_MODE : NORMAL_MODE;
                 update_display(&metronome, win, program_mode);
-                ma_device_start(&metronome.device);
+                metronome_start(&metronome);
             }
 
             if(program_mode==PRACTICE_MODE) {
@@ -579,7 +579,7 @@ int main(int argc, char **argv) {
                     metronome.practice_active = 0;
                     program_mode = PAUSE_MODE;
                     input_selection = BEAT_SELECTED;
-                    ma_device_stop(&metronome.device);
+                    metronome_stop(&metronome);
                     update_display(&metronome, win, program_mode);
                 }
             }

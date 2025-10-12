@@ -5,6 +5,8 @@
 #define MAX_MEASURES_PER_TRACK  32
 #define MAX_PRACTICE_SETS       32
 
+enum MetronomeState { METRONOME_STOPPED, METRONOME_STARTED, METRONOME_RUNNING };
+
 struct Measure {
     uint8_t beats;
     uint8_t unit;
@@ -32,6 +34,9 @@ struct Metronome {
     uint8_t practice_current;
     uint8_t practice_active;
 
+    enum MetronomeState state;
+
+    struct Measure count_in;
     struct Practice practice[MAX_PRACTICE_SETS];
     struct Track track; 
 
@@ -62,3 +67,5 @@ extern void metronome_insert_measure_at_end(struct Metronome *m);
 extern void metronome_remove_measure(struct Metronome *m);
 
 extern void metronome_practice_set_from_bpm(struct Practice *, uint8_t bpm);
+extern void metronome_start(struct Metronome *m);
+extern void metronome_stop(struct Metronome *m);
